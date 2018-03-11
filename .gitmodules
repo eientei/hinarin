@@ -1,0 +1,21 @@
+[submodule "libs/gumbo-parser"]
+	path = libs/gumbo-parser
+	url = https://github.com/google/gumbo-parser
+[submodule "libs/nuklear"]
+	path = libs/nuklear
+	url = https://github.com/vurtun/nuklear
+[submodule "libs/jerryscript"]
+	path = libs/jerryscript
+	url = https://github.com/jerryscript-project/jerryscript
+[submodule "libs/glfw"]
+	path = libs/glfw
+	url = https://github.com/glfw/glfw
+[submodule "libs/curl"]
+	path = libs/curl
+	url = https://github.com/curl/curl
+[submodule "libs/zlib"]
+	path = libs/zlib
+	url = https://github.com/madler/zlib
+[submodule "libs/glew"]
+	path = libs/glew
+	url = https://github.com/nigels-com/glew
