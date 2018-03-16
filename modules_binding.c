@@ -12,24 +12,12 @@
 #define CURL_STATICLIB
 #include <curl/curl.h>
 
-int get_homepath(char *homepath, size_t size) {
-#ifdef _WIN32
-    return snprintf(homepath, size, "file://localhost/%s%s/.hinarin/modules/", getenv("HOMEDRIVE"), getenv("HOMEPATH"));
-#else
-    return snprintf(homepath, size, "file://localhost/%s/.hinarin/modules/", getenv("HOME"));
-#endif
-}
+typedef struct {
+    jerry_value_t list;
+    jerry_value_t sources;
+} modules_t;
 
-size_t writer_to_string(void *ptr, size_t size, size_t nmemb, string_t *s) {
-    size_t new_len = s->len + size*nmemb;
-    s->ptr = realloc(s->ptr, new_len+1);
-    memcpy(s->ptr+s->len, ptr, size*nmemb);
-    s->ptr[new_len] = '\0';
-    s->len = new_len;
-    return size*nmemb;
-}
-
-void load_module_url(const char* homepath, int homepath_len, const char *sourceurl) {
+void load_module_url(const char* homepath, size_t homepath_len, const char *sourceurl) {
     void *curl = curl_easy_init();
     size_t source_len = strlen(sourceurl);
     if (strncmp("file://", sourceurl, 7) == 0) {
@@ -86,7 +74,7 @@ function(commit) {
     jerry_get_object_native_pointer(function_obj, (void **) &modules, NULL);
 
     char homepath[1024];
-    int homepath_len = get_homepath(homepath, sizeof(homepath));
+    size_t homepath_len = get_homepath(homepath, sizeof(homepath));
 
     uint32_t len = jerry_get_array_length(modules->sources);
     for (uint32_t i = 0; i < len; i++) {

@@ -19,3 +19,6 @@
 [submodule "libs/glew"]
 	path = libs/glew
 	url = https://github.com/nigels-com/glew
+[submodule "libs/pthread-win32"]
+	path = libs/pthread-win32
+	url = https://github.com/GerHobbelt/pthread-win32

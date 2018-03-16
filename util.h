@@ -5,7 +5,36 @@
 #ifndef HINARIN_UTIL_H
 #define HINARIN_UTIL_H
 
-#include <jerryscript-core.h>
+#include <jerryscript.h>
+#include <stdio.h>
+
+typedef struct {
+    char *ptr;
+    size_t len;
+} string_t;
+
+typedef void (*progress_func)(size_t processed_bytes, ssize_t total_bytes);
+
+typedef struct {
+    size_t iter;
+    ssize_t total;
+    size_t processed;
+    progress_func progress;
+    jerry_value_t headers;
+    FILE *file;
+    void *curl;
+} progress_t;
+
+size_t writer_to_file_progress(void *ptr, size_t size, size_t nmemb, progress_t *prog);
+size_t writer_to_string(void *ptr, size_t size, size_t nmemb, string_t *s);
+size_t writer_to_length(void *ptr, size_t size, size_t nmemb, int *len);
+size_t writer_to_file(void *ptr, size_t size, size_t nmemb, FILE *f);
+size_t headers_to_jerry_object(char *buffer, size_t size, size_t nitems, jerry_value_t *object);
+void cross_mkdir(const char *path);
+void mkdir_p(char* path);
+int mkdir_basedir(char *path);
+size_t get_homepath(char *homepath, size_t size);
+jerry_value_t download_to_file(const char *url, char *localfile, progress_func progress);
 
 #define function(name) static jerry_value_t (name)(const jerry_value_t function_obj, const jerry_value_t this_val, const jerry_value_t args[], const jerry_length_t args_count)
 

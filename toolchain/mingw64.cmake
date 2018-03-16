@@ -1,7 +1,7 @@
 # the name of the target operating system
 set(CMAKE_SYSTEM_NAME Windows)
 
-set(TOOLCHAIN_HOST --host=x86_64-w64-mingw32)
+set(TOOLCHAIN x86_64-w64-mingw32)
 
 # which compilers to use for C and C++
 set(CMAKE_C_COMPILER x86_64-w64-mingw32-gcc)
