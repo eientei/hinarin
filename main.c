@@ -116,7 +116,6 @@ int main() {
             printf("Could not fetch initialization script, error %d\n", err);
         }
     }
-
     load_module_url(initpath, homepath_len, (const char *) "file://init.js");
 
     //bind_gumbo();

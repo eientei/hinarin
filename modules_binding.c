@@ -33,8 +33,9 @@ void load_module_url(const char* homepath, int homepath_len, const char *sourceu
     void *curl = curl_easy_init();
     size_t source_len = strlen(sourceurl);
     if (strncmp("file://", sourceurl, 7) == 0) {
-        char filestr[homepath_len + source_len - 7];
-        snprintf(filestr, sizeof(filestr), "%s%s", homepath, sourceurl + 7);
+        char filestr[homepath_len + source_len - 7 + 1];
+        memmove(filestr, homepath, (size_t) homepath_len);
+        memmove(filestr+homepath_len, sourceurl+7, source_len - 6);
         curl_easy_setopt(curl, CURLOPT_URL, filestr);
     } else {
         curl_easy_setopt(curl, CURLOPT_URL, sourceurl);
