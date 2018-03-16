@@ -20,11 +20,6 @@ int get_homepath(char *homepath, size_t size) {
 #endif
 }
 
-typedef struct {
-    jerry_value_t list;
-    jerry_value_t sources;
-} modules_t;
-
 size_t writer_to_string(void *ptr, size_t size, size_t nmemb, string_t *s) {
     size_t new_len = s->len + size*nmemb;
     s->ptr = realloc(s->ptr, new_len+1);
@@ -32,6 +27,47 @@ size_t writer_to_string(void *ptr, size_t size, size_t nmemb, string_t *s) {
     s->ptr[new_len] = '\0';
     s->len = new_len;
     return size*nmemb;
+}
+
+void load_module_url(const char* homepath, int homepath_len, const char *sourceurl) {
+    void *curl = curl_easy_init();
+    size_t source_len = strlen(sourceurl);
+    if (strncmp("file://", sourceurl, 7) == 0) {
+        char filestr[homepath_len + source_len - 7 + 1];
+        snprintf(filestr, sizeof(filestr), "%s%s", homepath, sourceurl + 7);
+        curl_easy_setopt(curl, CURLOPT_URL, filestr);
+    } else {
+        curl_easy_setopt(curl, CURLOPT_URL, sourceurl);
+    }
+    string_t s = {0, 0};
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writer_to_string);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+
+    printf("Fetching %s\n", sourceurl);
+    CURLcode err = curl_easy_perform(curl);
+    curl_easy_cleanup(curl);
+
+    if (err != 0) {
+        printf("Fetching error %d\n", err);
+        free(s.ptr);
+    } else {
+        jerry_value_t func = jerry_parse((const jerry_char_t *) s.ptr, s.len, true);
+        if (jerry_value_has_error_flag(func)) {
+            jerry_value_clear_error_flag(&func);
+            printf("Error: ");
+            js_print(func);
+        } else {
+            jerry_value_t value = jerry_run(func);
+            if (jerry_value_has_error_flag(value)) {
+                jerry_value_clear_error_flag(&value);
+                printf("Error: ");
+                js_print(value);
+            }
+            jerry_release_value(value);
+        }
+        jerry_release_value(func);
+        free(s.ptr);
+    }
 }
 
 function(unload) {
@@ -51,53 +87,15 @@ function(commit) {
     char homepath[1024];
     int homepath_len = get_homepath(homepath, sizeof(homepath));
 
-    for (uint32_t i = 0; i < jerry_get_array_length(modules->sources); i++) {
+    uint32_t len = jerry_get_array_length(modules->sources);
+    for (uint32_t i = 0; i < len; i++) {
         jerry_value_t source = jerry_get_property_by_index(modules->sources, i);
         js_define_string(source, sourceurl);
 
-        void *curl = curl_easy_init();
-
-        size_t source_len = strlen((const char *) sourceurl);
-        if (strncmp("file://", (const char *) sourceurl, 7) == 0) {
-            char filestr[homepath_len + source_len - 7 + 1];
-            snprintf(filestr, sizeof(filestr), "%s%s", homepath, sourceurl + 7);
-            printf("Fetching %s\n", filestr);
-            curl_easy_setopt(curl, CURLOPT_URL, filestr);
-        } else {
-            printf("Fetching %s\n", sourceurl);
-            curl_easy_setopt(curl, CURLOPT_URL, sourceurl);
-        }
-
-        string_t s = {0, 0};
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writer_to_string);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
-
-        CURLcode err = curl_easy_perform(curl);
-        curl_easy_cleanup(curl);
-
-        if (err != 0) {
-            printf("Fetching error %d\n", err);
-            free(s.ptr);
-        } else {
-            jerry_value_t func = jerry_parse((const jerry_char_t *) s.ptr, s.len, true);
-            if (jerry_value_has_error_flag(func)) {
-                jerry_value_clear_error_flag(&func);
-                printf("Error: ");
-                js_print(func);
-            } else {
-                jerry_value_t value = jerry_run(func);
-                if (jerry_value_has_error_flag(value)) {
-                    jerry_value_clear_error_flag(&value);
-                    printf("Error: ");
-                    js_print(value);
-                }
-                jerry_release_value(value);
-            }
-            jerry_release_value(func);
-            free(s.ptr);
-        }
+        load_module_url(homepath, homepath_len, (const char *) sourceurl);
 
         jerry_release_value(source);
+
         jerry_delete_property_by_index(modules->sources, i);
     }
     return jerry_create_undefined();
@@ -206,6 +204,9 @@ void bind_modules() {
     js_register_function(modules, "load", load, mods);
     js_register_function(modules, "loaded", loaded, mods);
     js_register_function(modules, "find", find, mods);
+
+
+    jerry_set_object_native_pointer(modules, mods, NULL);
 
     jerry_release_value(modules);
 }

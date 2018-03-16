@@ -117,26 +117,7 @@ int main() {
         }
     }
 
-
-    jerry_value_t global = jerry_get_global_object();
-    jerry_value_t modules = js_prop(global, "modules");
-    jerry_value_t null = jerry_create_null();
-
-    jerry_value_t add = js_prop(modules, "add");
-    jerry_value_t str = jerry_create_string((const jerry_char_t *) "file://init.js");
-    jerry_value_t ret = jerry_call_function(add, null, &str, 1);
-    jerry_release_value(ret);
-    jerry_release_value(str);
-    jerry_release_value(add);
-
-    jerry_value_t commit = js_prop(modules, "commit");
-    ret = jerry_call_function(commit, null, NULL, 0);
-    jerry_release_value(ret);
-    jerry_release_value(commit);
-
-    jerry_release_value(null);
-    jerry_release_value(modules);
-    jerry_release_value(global);
+    load_module_url(initpath, homepath_len, (const char *) "file://init.js");
 
     //bind_gumbo();
     //bind_curl();
