@@ -12,11 +12,11 @@
 #define CURL_STATICLIB
 #include <curl/curl.h>
 
-int get_homepath(char *homepath) {
+int get_homepath(char *homepath, size_t size) {
 #ifdef _WIN32
-    return snprintf(homepath, sizeof(homepath), "file://localhost/%s%s/.hinarin/modules/", getenv("HOMEDRIVE"), getenv("HOMEPATH"));
+    return snprintf(homepath, size, "file://localhost/%s%s/.hinarin/modules/", getenv("HOMEDRIVE"), getenv("HOMEPATH"));
 #else
-    return snprintf(homepath, sizeof(homepath), "file://localhost/%s/.hinarin/modules/", getenv("HOME"));
+    return snprintf(homepath, size, "file://localhost/%s/.hinarin/modules/", getenv("HOME"));
 #endif
 }
 
@@ -24,13 +24,6 @@ typedef struct {
     jerry_value_t list;
     jerry_value_t sources;
 } modules_t;
-
-static void free_list(void *ptr) {
-    modules_t *modules = ptr;
-    jerry_release_value(modules->list);
-    jerry_release_value(modules->sources);
-    free(modules);
-}
 
 size_t writer_to_string(void *ptr, size_t size, size_t nmemb, string_t *s) {
     size_t new_len = s->len + size*nmemb;
@@ -56,7 +49,7 @@ function(commit) {
     jerry_get_object_native_pointer(function_obj, (void **) &modules, NULL);
 
     char homepath[1024];
-    int homepath_len = get_homepath(homepath);
+    int homepath_len = get_homepath(homepath, sizeof(homepath));
 
     for (uint32_t i = 0; i < jerry_get_array_length(modules->sources); i++) {
         jerry_value_t source = jerry_get_property_by_index(modules->sources, i);
@@ -213,10 +206,6 @@ void bind_modules() {
     js_register_function(modules, "load", load, mods);
     js_register_function(modules, "loaded", loaded, mods);
     js_register_function(modules, "find", find, mods);
-
-    jerry_object_native_info_t list_info;
-    list_info.free_cb = free_list;
-    jerry_set_object_native_pointer(modules, mods, &list_info);
 
     jerry_release_value(modules);
 }

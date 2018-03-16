@@ -17,6 +17,7 @@ struct string {
 
 static jerry_value_t modules_sources;
 
+/*
 jerry_value_t addsource(const jerry_value_t function_obj, const jerry_value_t this_val, const jerry_value_t args[], const jerry_length_t args_count) {
     if (args_count != 1) {
         return js_create_abort("Invalid argument");
@@ -106,4 +107,4 @@ void modules_load(jerry_value_t modules) {
 
         jerry_release_value(source);
     }
-}
+}*/

@@ -13,7 +13,7 @@ typedef struct {
 } string_t;
 
 size_t writer_to_string(void *ptr, size_t size, size_t nmemb, string_t *s);
-int get_homepath(char *homepath);
+int get_homepath(char *homepath, size_t size);
 
 void bind_modules();
 
