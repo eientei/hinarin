@@ -35,7 +35,7 @@ endif(NOT WIN32)
 include_directories(${CMAKE_BINARY_DIR}/libs/include ${OPENGL_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${CURL_INCLUDE_DIRECTORIES} ${X11_INCLUDE_DIR})
 link_directories(${CMAKE_BINARY_DIR}/libs/lib ${CMAKE_BINARY_DIR}/libs/lib64)
 
-set(SOURCES main.c nuklear_binding.c nuklear_binding.h gumbo_binding.c gumbo_binding.h curl_binding.c curl_binding.h util.c util.h modules.c modules.h system_binding.c system_binding.h modules_binding.c modules_binding.h)
+set(SOURCES main.c nuklear_binding.c nuklear_binding.h util.c util.h system_binding.c system_binding.h modules_binding.c modules_binding.h)
 if (WIN32)
   add_executable(hinarin WIN32 ${SOURCES})
   target_link_libraries(hinarin ${OPENGL_gl_LIBRARY} glfw3.a jerry-core.a jerry-ext.a jerry-libm.a jerry-port-default.a gumbo.a libzlibstatic.a curl.a glew32.a pthread.a crypt32 ws2_32)
