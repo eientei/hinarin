@@ -316,7 +316,7 @@ int hinarin_mkdir_basedir_recursive(const char *path) {
 
 size_t hinarin_homedir(char *buf, size_t buflen) {
 #ifdef _WIN32
-    size_t len = (size_t) snprintf(buf, buflen, "/%s%s", getenv("HOMEDRIVE"), getenv("HOMEPATH"));
+    size_t len = (size_t) snprintf(buf, buflen, "%s%s", getenv("HOMEDRIVE"), getenv("HOMEPATH"));
 #else
     size_t len = (size_t) snprintf(buf, buflen, "%s", getenv("HOME"));
 #endif
@@ -348,11 +348,16 @@ static size_t curl_writefunc(void *ptr, size_t size, size_t n, void *data) {
     if (download->progressfunc) {
         download->progressfunc(download->processed, download->total, download->progressfunc_data);
     }
+
+    size_t iterprocessed = 0;
     if (download->writefunc) {
-        download->processed += download->writefunc(ptr, length, download->writefunc_data);
+        iterprocessed = download->writefunc(ptr, length, download->writefunc_data);
     } else {
-        download->processed += length;
+        iterprocessed = length;
     }
+
+    download->processed += iterprocessed;
+    return iterprocessed;
 }
 
 static size_t curl_headerfunc(char *ptr, size_t size, size_t n, void *data) {
@@ -431,7 +436,11 @@ jerry_value_t hinarin_download(const char *url, jerry_value_t *sendheaders, jerr
         char homepath[1024];
         hinarin_homedir(homepath, sizeof(homepath));
         char urlpath[1024];
+#ifdef _WIN32
+        snprintf(urlpath, sizeof(urlpath), "file://localhost/%s/.hinarin/modules/%s", homepath, url+7);
+#else
         snprintf(urlpath, sizeof(urlpath), "file://localhost%s/.hinarin/modules/%s", homepath, url+7);
+#endif
         curl_easy_setopt(download.curl, CURLOPT_URL, urlpath);
         printf(" (-> %s)", urlpath);
     } else {
@@ -476,8 +485,23 @@ jerry_value_t hinarin_download(const char *url, jerry_value_t *sendheaders, jerr
 jerry_value_t hinarin_download_to_file(const char *url, const char *filepath, jerry_value_t *sendheaders, jerry_value_t *sendcookies, hinarin_progressfunc progressfunc, void *progressfunc_data) {
     hinarin_mkdir_basedir_recursive(filepath);
     FILE *file = fopen(filepath, "a");
+    long position = (size_t) ftell(file);
+    bool cleanup = false;
+    if (position > 0) {
+        if (!sendheaders) {
+            jerry_value_t resumeheader = jerry_create_object();
+            sendheaders = &resumeheader;
+            cleanup = true;
+        }
+        char bufbytes[1024];
+        snprintf(bufbytes, sizeof(bufbytes), "bytes=%ld-", position);
+        hinarin_set_name_string(*sendheaders, "Range", bufbytes);
+    }
     jerry_value_t value = hinarin_download(url, sendheaders, sendcookies, hinarin_write_to_file, file, progressfunc, progressfunc_data);
     fclose(file);
+    if (cleanup) {
+        jerry_release_value(*sendheaders);
+    }
     return value;
 }
 
