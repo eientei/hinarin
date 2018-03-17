@@ -16,15 +16,15 @@
 #include <string.h>
 #include <nuklear_glfw_gl3.h>
 
-static jerry_value_t draw_funcs;
-
 static struct nk_rect get_rect(jerry_value_t value) {
-    double x = js_prop_double(value, "x");
-    double y = js_prop_double(value, "y");
-    double w = js_prop_double(value, "w");
-    double h = js_prop_double(value, "h");
+    double x = hinarin_get_name_number(value, "x");
+    double y = hinarin_get_name_number(value, "y");
+    double w = hinarin_get_name_number(value, "w");
+    double h = hinarin_get_name_number(value, "h");
     return nk_rect((float) x, (float) y, (float) w, (float) h);
 }
+
+/*
 
 static jerry_value_t from_rect(struct nk_rect rect) {
     jerry_value_t object = jerry_create_object();
@@ -104,28 +104,6 @@ static nk_flags obj_to_flags(jerry_value_t obj) {
     } \
     struct nk_context *ctx; \
     jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
-
-
-function(add) {
-    define_context(2, add);
-
-    if (!jerry_value_is_string(args[0])) {
-        return js_create_abort("Invalid argument[0] in add() -- should be string");
-    }
-
-    if (!jerry_value_is_function(args[1])) {
-        return js_create_abort("Invalid argument[1] in add() -- should be functuon");
-    }
-
-    jerry_value_t obj = jerry_create_object();
-    js_register_prop_name(obj, "module", args[0]);
-    js_register_prop_name(obj, "func", args[1]);
-    jerry_value_t result = jerry_set_property_by_index(draw_funcs, jerry_get_array_length(draw_funcs), obj);
-    jerry_release_value(obj);
-    jerry_release_value(result);
-
-    return jerry_create_undefined();
-}
 
 function(begin) {
     define_context(3, begin);
@@ -947,7 +925,6 @@ function(propertyd) {
 }
 
 static void functions(jerry_value_t nuklear, struct nk_context *ctx) {
-    js_register_function(nuklear, "add", add, ctx);
     js_register_function(nuklear, "begin", begin, ctx);
     js_register_function(nuklear, "begin_titled", begin_titled, ctx);
     js_register_function(nuklear, "end", end, ctx);
@@ -1021,8 +998,65 @@ static void functions(jerry_value_t nuklear, struct nk_context *ctx) {
     js_register_function(nuklear, "propertyi", propertyi, ctx);
     js_register_function(nuklear, "propertyd", propertyd, ctx);
 }
+*/
 
-jerry_value_t bind_nuklear(GLFWwindow *window) {
+hinarin_function(hinarin_nuklear_begin) {
+    if (args_count < 3) {
+        return hinarin_create_error("begin must have 3 args: (title, rect, flags)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], title);
+    struct nk_rect rect = get_rect(args[1]);
+    double flags = jerry_get_number_value(args[2]);
+
+    return jerry_create_boolean(nk_begin(ctx, title, rect, (nk_flags) flags) != 0);
+}
+
+hinarin_function(hinarin_nuklear_begin_titled) {
+    if (args_count < 4) {
+        return hinarin_create_error("begin must have 4 args: (name, title, rect, flags)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+    hinarin_string(args[1], title);
+    struct nk_rect rect = get_rect(args[2]);
+    double flags = jerry_get_number_value(args[3]);
+
+    return jerry_create_boolean(nk_begin_titled(ctx, name, title, rect, (nk_flags) flags) != 0);
+}
+
+hinarin_function(hinarin_nuklear_end) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    nk_end(ctx);
+
+    return jerry_create_undefined();
+}
+
+hinarin_function(hinarin_nuklear_window_set_bounds) {
+    if (args_count < 2) {
+        return hinarin_create_error("window_set_bounds must have 2 args: (name, rect)");
+    }
+    
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+    struct nk_rect rect = get_rect(args[1]);
+    
+    nk_window_set_bounds(ctx, name, rect);
+
+    return jerry_create_undefined();
+}
+
+jerry_value_t hinarin_nuklear_binding(GLFWwindow *window) {
     struct nk_context *ctx = nk_glfw3_init(window, NK_GLFW3_INSTALL_CALLBACKS);
 
     struct nk_font_atlas *atlas;
@@ -1032,39 +1066,12 @@ jerry_value_t bind_nuklear(GLFWwindow *window) {
     nk_style_set_font(ctx, &font->handle);
 
     jerry_value_t nuklear_window = jerry_create_object();
-    functions(nuklear_window, ctx);
+    jerry_set_object_native_pointer(nuklear_window, ctx, NULL);
+
+    hinarin_set_name_function(nuklear_window, "begin", hinarin_nuklear_begin, ctx);
+    hinarin_set_name_function(nuklear_window, "begin_titled", hinarin_nuklear_begin_titled, ctx);
+    hinarin_set_name_function(nuklear_window, "end", hinarin_nuklear_end, ctx);
+    hinarin_set_name_function(nuklear_window, "window_set_bounds", hinarin_nuklear_window_set_bounds, ctx);
+
     return nuklear_window;
 }
-
-/*
-void nuklear_draw() {
-    jerry_value_t null_obj = jerry_create_null();
-    for (uint32_t  i = 0; i < jerry_get_array_length(draw_funcs); i++) {
-        jerry_value_t obj = jerry_get_property_by_index(draw_funcs, i);
-        jerry_value_t func = js_prop(obj, "func");
-        jerry_value_t module = js_prop(obj, "module");
-        
-        
-        jerry_value_t result = jerry_call_function(func, null_obj, NULL, 0);
-        if (jerry_value_has_error_flag(result)) {
-            jerry_value_clear_error_flag(&result);
-            js_define_string(module, text);
-            printf("Error in module %s:\n", text);
-            js_print(result);
-        }
-
-        jerry_release_value(result);
-        jerry_release_value(func);
-        jerry_release_value(module);
-
-        jerry_release_value(obj);
-    }
-    jerry_release_value(null_obj);
-}
-
-void nuklear_reset() {
-    for (uint32_t  i = 0; i < jerry_get_array_length(draw_funcs); i++) {
-        jerry_delete_property_by_index(draw_funcs, i);
-    }
-}
-*/

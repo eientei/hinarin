@@ -6,6 +6,6 @@
 
 #include <jerryscript.h>
 
-jerry_value_t bind_nuklear(GLFWwindow *window);
+jerry_value_t hinarin_nuklear_binding(GLFWwindow *window);
 
 #endif //HINARIN_NUKLEAR_BINDING_H

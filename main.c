@@ -38,21 +38,18 @@ static void error_callback(int e, const char *d)  {
 }
 
 static void *init_start(void *data) {
+    char homepath[1024];
+    hinarin_homedir(homepath, sizeof(homepath));
     char initpath[1024];
-    size_t homepath_len = get_homepath(initpath, sizeof(initpath));
-    memmove(initpath+homepath_len, "init.js", 8);
-    void *curl = curl_easy_init();
-    int len = 0;
-    curl_easy_setopt(curl, CURLOPT_URL, initpath);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writer_to_length);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &len);
-    curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
-    if (len == 0) {
-        jerry_value_t response = download_to_file("https://raw.githubusercontent.com/eientei/hinarin/master/base/init.js", initpath+17, NULL);
-        jerry_release_value(response);
+    snprintf(initpath, sizeof(initpath), "%s/.hinarin/modules/init.js", homepath);
+    jerry_value_t value = hinarin_download("file://init.js", NULL, NULL, NULL, NULL, NULL, NULL);
+    double length = hinarin_get_name_number(value, "processed");
+    jerry_release_value(value);
+    if (length == 0) {
+        jerry_release_value(hinarin_download_to_file("https://raw.githubusercontent.com/eientei/hinarin/master/base/init.js", initpath, NULL, NULL, NULL, NULL));
     }
-    load_module_url(initpath, homepath_len, (const char *) "file://init.js");
+
+    hinarin_load_module((const char *) "file://init.js");
 }
 
 int main() {
@@ -66,9 +63,9 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     int width, height, xpos, ypos;
-    GLFWwindow *window = glfwCreateWindow(900, 600, "Hinarin", NULL, NULL);
-    glfwMakeContextCurrent(window);
-    glfwGetWindowSize(window, &width, &height);
+    GLFWwindow *glfwWindow = glfwCreateWindow(900, 600, "Hinarin", NULL, NULL);
+    glfwMakeContextCurrent(glfwWindow);
+    glfwGetWindowSize(glfwWindow, &width, &height);
     glViewport(0, 0, width, height);
     if (glewInit() != GLEW_OK) {
         fprintf(stderr, "Failed to setup GLEW\n");
@@ -77,9 +74,9 @@ int main() {
 
     jerry_init(JERRY_INIT_EMPTY);
 
-    bind_system();
-    bind_modules();
-    jerry_value_t window_obj = bind_nuklear(window);
+    hinarin_system_bind();
+    hinarin_modules_bind();
+    jerry_value_t window = hinarin_nuklear_binding(glfwWindow);
 
     pthread_t init_thread;
     pthread_create(&init_thread, NULL, init_start, NULL);
@@ -88,28 +85,54 @@ int main() {
     gettimeofday(&te, NULL);
     time_t start = (te.tv_sec * 1000 + te.tv_usec / 1000);
     uint32_t frame = 0;
-    while (!glfwWindowShouldClose(window)) {
+
+    jerry_value_t global = jerry_get_global_object();
+    jerry_value_t modules = hinarin_get_name(global, "modules");
+
+    modules_t *mods = NULL;
+    jerry_get_object_native_pointer(modules, (void **) &mods, NULL);
+    
+    while (!glfwWindowShouldClose(glfwWindow)) {
         glfwPollEvents();
         nk_glfw3_new_frame();
 
-        glfwGetWindowPos(window, &xpos, &ypos);
-        glfwGetWindowSize(window, &width, &height);
+        glfwGetWindowPos(glfwWindow, &xpos, &ypos);
+        glfwGetWindowSize(glfwWindow, &width, &height);
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(0.2, 0.2, 0.2, 1.0);
 
         gettimeofday(&te, NULL);
-        js_register_double(window_obj, "xpos", xpos);
-        js_register_double(window_obj, "ypos", ypos);
-        js_register_double(window_obj, "width", width);
-        js_register_double(window_obj, "height", height);
-        js_register_double(window_obj, "frame", frame++);
-        js_register_double(window_obj, "milliseconds", (te.tv_sec * 1000 + te.tv_usec / 1000) - start);
+
+        hinarin_set_name_number(window, "xpos", xpos);
+        hinarin_set_name_number(window, "ypos", ypos);
+        hinarin_set_name_number(window, "width", width);
+        hinarin_set_name_number(window, "height", height);
+        hinarin_set_name_number(window, "frame", frame++);
+        hinarin_set_name_number(window, "milliseconds", (te.tv_sec * 1000 + te.tv_usec / 1000) - start);
+        
+        for (uint32_t i = 0; i < jerry_get_array_length(mods->modules_list); i++) {
+            jerry_value_t module = jerry_get_property_by_index(mods->modules_list, i);
+            if (hinarin_has_key(module, "render")) {
+                jerry_value_t render = hinarin_get_name(module, "render");
+                jerry_value_t null = jerry_create_null();
+                jerry_value_t result = jerry_call_function(render, null, &window, 1);
+                if (jerry_value_has_error_flag(result)) {
+                    hinarin_print(result);
+                }
+                jerry_release_value(result);
+                jerry_release_value(null);
+                jerry_release_value(render);
+            }
+            jerry_release_value(module);
+        }
 
         nk_glfw3_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
-        glfwSwapBuffers(window);
+        glfwSwapBuffers(glfwWindow);
     }
-    jerry_release_value(window_obj);
+    jerry_release_value(window);
+    jerry_release_value(modules);
+    jerry_release_value(global);
 
     pthread_join(init_thread, NULL);
 

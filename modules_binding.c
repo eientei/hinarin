@@ -4,198 +4,127 @@
 
 #include "modules_binding.h"
 #include "util.h"
-
-#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
-#define CURL_STATICLIB
-#include <curl/curl.h>
+void hinarin_load_module(const char *url) {
+    jerry_value_t value = hinarin_download_to_data(url, NULL, NULL, NULL, NULL);
 
-typedef struct {
-    jerry_value_t list;
-    jerry_value_t sources;
-} modules_t;
-
-void load_module_url(const char* homepath, size_t homepath_len, const char *sourceurl) {
-    void *curl = curl_easy_init();
-    size_t source_len = strlen(sourceurl);
-    if (strncmp("file://", sourceurl, 7) == 0) {
-        char filestr[homepath_len + source_len - 7 + 1];
-        memmove(filestr, homepath, (size_t) homepath_len);
-        memmove(filestr+homepath_len, sourceurl+7, source_len - 6);
-        curl_easy_setopt(curl, CURLOPT_URL, filestr);
+    hinarin_get_name_string(value, "data", data);
+    jerry_value_t func = jerry_parse((const jerry_char_t *) data, strlen(data), true);
+    if (jerry_value_has_error_flag(func)) {
+        hinarin_print(func);
     } else {
-        curl_easy_setopt(curl, CURLOPT_URL, sourceurl);
-    }
-    string_t s = {0, 0};
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writer_to_string);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
-
-    printf("Fetching %s\n", sourceurl);
-    CURLcode err = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
-
-    if (err != 0) {
-        printf("Fetching error %d\n", err);
-        free(s.ptr);
-    } else {
-        jerry_value_t func = jerry_parse((const jerry_char_t *) s.ptr, s.len, true);
-        if (jerry_value_has_error_flag(func)) {
-            jerry_value_clear_error_flag(&func);
-            printf("Error: ");
-            js_print(func);
-        } else {
-            jerry_value_t value = jerry_run(func);
-            if (jerry_value_has_error_flag(value)) {
-                jerry_value_clear_error_flag(&value);
-                printf("Error: ");
-                js_print(value);
-            }
-            jerry_release_value(value);
+        jerry_value_t result = jerry_run(func);
+        if (jerry_value_has_error_flag(result)) {
+            hinarin_print(result);
         }
-        jerry_release_value(func);
-        free(s.ptr);
+        jerry_release_value(result);
     }
+    jerry_release_value(func);
+    jerry_release_value(value);
 }
 
-function(unload) {
-    modules_t *modules = NULL;
-    jerry_get_object_native_pointer(function_obj, (void **) &modules, NULL);
+hinarin_function(hinarin_modules_unload) {
+    modules_t *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
 
-    for (uint32_t i = 0; i < jerry_get_array_length(modules->list); i++) {
-        jerry_delete_property_by_index(modules->list, i);
-    }
-    return jerry_create_undefined();
-}
-
-function(commit) {
-    modules_t *modules = NULL;
-    jerry_get_object_native_pointer(function_obj, (void **) &modules, NULL);
-
-    char homepath[1024];
-    size_t homepath_len = get_homepath(homepath, sizeof(homepath));
-
-    uint32_t len = jerry_get_array_length(modules->sources);
-    for (uint32_t i = 0; i < len; i++) {
-        jerry_value_t source = jerry_get_property_by_index(modules->sources, i);
-        js_define_string(source, sourceurl);
-
-        load_module_url(homepath, homepath_len, (const char *) sourceurl);
-
-        jerry_release_value(source);
-
-        jerry_delete_property_by_index(modules->sources, i);
+    for (uint32_t i = 0; i < jerry_get_array_length(ctx->modules_list); i++) {
+        jerry_delete_property_by_index(ctx->modules_list, i);
     }
     return jerry_create_undefined();
 }
 
-function(add) {
-    modules_t *modules = NULL;
-    jerry_get_object_native_pointer(function_obj, (void **) &modules, NULL);
-    
-    jerry_set_property_by_index(modules->sources, jerry_get_array_length(modules->sources), args[0]);
-    
+hinarin_function(hinarin_modules_load) {
+    modules_t *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    for (uint32_t i = 0; i < jerry_get_array_length(ctx->modules_sources_to_load); i++) {
+        hinarin_get_index_string(ctx->modules_sources_to_load, i, url);
+        hinarin_load_module(url);
+        jerry_delete_property_by_index(ctx->modules_sources_to_load, i);
+    }
+
     return jerry_create_undefined();
 }
 
-function(load) {
-    modules_t *modules = NULL;
-    jerry_get_object_native_pointer(function_obj, (void **) &modules, NULL);
+hinarin_function(hinarin_modules_add) {
+    modules_t *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
 
-    jerry_value_t newname = js_prop(args[0], "name");
-    js_define_string(newname, newnamestr);
-    size_t newnamestr_len = strlen((const char *) newnamestr);
+    jerry_set_property_by_index(ctx->modules_sources_to_load, jerry_get_array_length(ctx->modules_sources_to_load), args[0]);
 
-    for (uint32_t i = 0; i < jerry_get_array_length(modules->list); i++) {
-        jerry_value_t module = jerry_get_property_by_index(modules->list, i);
+    return jerry_create_undefined();
+}
 
-        jerry_value_t name = js_prop(module, "name");
-        js_define_string(name, namestr);
-        if (strlen((const char *) namestr) == newnamestr_len && strncmp((const char *) namestr, (const char *) newnamestr, newnamestr_len) == 0) {
-            jerry_value_t err = jerry_create_error(JERRY_ERROR_COMMON, (const jerry_char_t *) "Module with that name already exists");
+hinarin_function(hinarin_modules_define) {
+    modules_t *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_get_name_string(args[0], "name", name);
+
+    for (uint32_t i = 0; i < jerry_get_array_length(ctx->modules_list); i++) {
+        hinarin_get_index_string(ctx->modules_list, i, exname);
+        if (hinarin_equals(exname, name)) {
+            jerry_value_t err = hinarin_create_error("Module with that name is already exists");
             jerry_value_set_error_flag(&err);
-            jerry_release_value(module);
-            jerry_release_value(newname);
             return err;
         }
-        
-        jerry_release_value(module);
-    }
-    jerry_release_value(newname);
-
-    jerry_set_property_by_index(modules->list, jerry_get_array_length(modules->list), args[0]);
-    return jerry_create_undefined();
-}
-
-function(loaded) {
-    modules_t *modules = NULL;
-    jerry_get_object_native_pointer(function_obj, (void **) &modules, NULL);
-
-    js_define_string(args[0], newnamestr);
-    size_t newnamestr_len = strlen((const char *) newnamestr);
-
-    for (uint32_t i = 0; i < jerry_get_array_length(modules->list); i++) {
-        jerry_value_t module = jerry_get_property_by_index(modules->list, i);
-
-        jerry_value_t name = js_prop(module, "name");
-        js_define_string(name, namestr);
-        if (strlen((const char *) namestr) == newnamestr_len && strncmp((const char *) namestr, (const char *) newnamestr, newnamestr_len) == 0) {
-            jerry_value_t err = jerry_create_error(JERRY_ERROR_COMMON, (const jerry_char_t *) "Module with that name already exists");
-            jerry_value_set_error_flag(&err);
-            jerry_release_value(module);
-            return jerry_create_boolean(true);
-        }
-
-        jerry_release_value(module);
     }
 
-    return jerry_create_boolean(false);
+    jerry_set_property_by_index(ctx->modules_list, jerry_get_array_length(ctx->modules_list), args[0]);
+    return  jerry_create_undefined();
 }
 
-function(find) {
-    modules_t *modules = NULL;
-    jerry_get_object_native_pointer(function_obj, (void **) &modules, NULL);
+hinarin_function(hinarin_modules_find) {
+    modules_t *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
 
-    js_define_string(args[0], newnamestr);
-    size_t newnamestr_len = strlen((const char *) newnamestr);
+    hinarin_get_name_string(args[0], "name", name);
 
-    for (uint32_t i = 0; i < jerry_get_array_length(modules->list); i++) {
-        jerry_value_t module = jerry_get_property_by_index(modules->list, i);
-
-        jerry_value_t name = js_prop(module, "name");
-        js_define_string(name, namestr);
-        if (strlen((const char *) namestr) == newnamestr_len && strncmp((const char *) namestr, (const char *) newnamestr, newnamestr_len) == 0) {
-            jerry_value_t err = jerry_create_error(JERRY_ERROR_COMMON, (const jerry_char_t *) "Module with that name already exists");
-            jerry_value_set_error_flag(&err);
-            return module;
+    for (uint32_t i = 0; i < jerry_get_array_length(ctx->modules_list); i++) {
+        hinarin_get_index_string(ctx->modules_list, i, exname);
+        if (hinarin_equals(exname, name)) {
+            return jerry_get_property_by_index(ctx->modules_list, i);
         }
-
-        jerry_release_value(module);
     }
 
     return jerry_create_null();
 }
 
-void bind_modules() {
+hinarin_function(hinarin_modules_loaded) {
+    modules_t *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_get_name_string(args[0], "name", name);
+
+    for (uint32_t i = 0; i < jerry_get_array_length(ctx->modules_list); i++) {
+        hinarin_get_index_string(ctx->modules_list, i, exname);
+        if (hinarin_equals(exname, name)) {
+            return jerry_create_boolean(true);
+        }
+    }
+
+    return jerry_create_boolean(false);
+}
+
+void hinarin_modules_bind() {
     jerry_value_t global = jerry_get_global_object();
     jerry_value_t modules = jerry_create_object();
-    js_register_prop_name(global, "modules", modules);
-    jerry_release_value(global);
+    hinarin_set_name_value(global, "modules", modules);
 
-    modules_t *mods = calloc(1, sizeof(modules_t));
-    mods->list = jerry_create_array(0);
-    mods->sources = jerry_create_array(0);
+    modules_t *ctx = calloc(1, sizeof(modules_t));
+    ctx->modules_list = jerry_create_array(0);
+    ctx->modules_sources_to_load = jerry_create_array(0);
 
-    js_register_function(modules, "unload", unload, mods);
-    js_register_function(modules, "commit", commit, mods);
-    js_register_function(modules, "add", add, mods);
-    js_register_function(modules, "load", load, mods);
-    js_register_function(modules, "loaded", loaded, mods);
-    js_register_function(modules, "find", find, mods);
+    hinarin_set_name_function(modules, "unload", hinarin_modules_unload, ctx);
+    hinarin_set_name_function(modules, "load", hinarin_modules_load, ctx);
+    hinarin_set_name_function(modules, "add", hinarin_modules_add, ctx);
+    hinarin_set_name_function(modules, "define", hinarin_modules_define, ctx);
+    hinarin_set_name_function(modules, "find", hinarin_modules_find, ctx);
+    hinarin_set_name_function(modules, "loaded", hinarin_modules_loaded, ctx);
 
-
-    jerry_set_object_native_pointer(modules, mods, NULL);
-
+    jerry_set_object_native_pointer(modules, ctx, NULL);
     jerry_release_value(modules);
+    jerry_release_value(global);
 }

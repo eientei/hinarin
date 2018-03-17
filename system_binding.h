@@ -5,6 +5,6 @@
 #ifndef HINARIN_SYSTEM_BINDING_H
 #define HINARIN_SYSTEM_BINDING_H
 
-void bind_system();
+void hinarin_system_bind();
 
 #endif //HINARIN_SYSTEM_BINDING_H

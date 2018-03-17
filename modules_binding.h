@@ -8,7 +8,12 @@
 #include <jerryscript.h>
 #include <stdlib.h>
 
-void load_module_url(const char* homepath, size_t homepath_len, const char *sourceurl);
-void bind_modules();
+typedef struct {
+    jerry_value_t modules_list;
+    jerry_value_t modules_sources_to_load;
+} modules_t;
+
+void hinarin_load_module(const char *sourceurl);
+void hinarin_modules_bind();
 
 #endif //HINARIN_MODULES_BINDING_H

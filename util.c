@@ -4,9 +4,8 @@
 
 #include "util.h"
 
-#include <memory.h>
-#include <stdlib.h>
-#include <sys/stat.h>
+#include <stdio.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <direct.h>
@@ -14,102 +13,298 @@
 
 #define CURL_STATICLIB
 #include <curl/curl.h>
+#include <sys/stat.h>
 
-size_t writer_to_string(void *ptr, size_t size, size_t nmemb, string_t *s) {
-    size_t new_len = s->len + size*nmemb;
-    s->ptr = realloc(s->ptr, new_len+1);
-    memcpy(s->ptr+s->len, ptr, size*nmemb);
-    s->ptr[new_len] = '\0';
-    s->len = new_len;
-    return size*nmemb;
+jerry_value_t hinarin_create_error(const char *name) {
+    jerry_value_t err = jerry_create_error(JERRY_ERROR_COMMON, (const jerry_char_t *) name);
+    jerry_value_set_error_flag(&err);
+    return err;
 }
 
-size_t writer_to_length(void *ptr, size_t size, size_t nmemb, int *len) {
-    *len += size*nmemb;
-    return size*nmemb;
+bool hinarin_equals(const char *a, const char *b) {
+    return strlen(a) == strlen(b) && strcmp(a, b) == 0;
 }
 
-size_t writer_to_file(void *ptr, size_t size, size_t nmemb, FILE *f) {
-    return fwrite(ptr, size, nmemb, f) * size;
+bool hinarin_starts_with(const char *str, const char *prefix) {
+    return strlen(str) >= strlen(prefix) && strcmp(str, prefix) == 0;
 }
 
-size_t writer_to_file_progress(void *ptr, size_t size, size_t nmemb, progress_t *prog) {
-    size_t current = fwrite(ptr, size, nmemb, prog->file) * size;
-    prog->processed += current;
-    if (prog->iter == 0) {
-        curl_off_t total;
-        curl_easy_getinfo(prog->curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &total);
-        prog->total = total;
+bool hinarin_has_key(jerry_value_t value, const char *keyname) {
+    jerry_value_t string = jerry_create_string((const jerry_char_t *) keyname);
+    jerry_value_t boolean = jerry_has_property(value, string);
+    bool result = jerry_get_boolean_value(boolean);
+    jerry_release_value(boolean);
+    jerry_release_value(string);
+    return result;
+}
+bool hinarin_has_own_key(jerry_value_t value, const char *keyname) {
+    jerry_value_t string = jerry_create_string((const jerry_char_t *) keyname);
+    jerry_value_t boolean = jerry_has_own_property(value, string);
+    bool result = jerry_get_boolean_value(boolean);
+    jerry_release_value(boolean);
+    jerry_release_value(string);
+    return result;
+}
+
+typedef struct {
+    int depth;
+    int iter;
+} depth_iter_t;
+
+static bool foreach_print(const jerry_value_t property_name, const jerry_value_t property_value, void *data) {
+    depth_iter_t *d = data;
+    if (d->iter > 0) {
+        printf(",");
     }
-    if (prog->progress) {
-        prog->progress(prog->processed, prog->total);
+    printf("\n");
+    for (int i = 0; i < d->depth; i++) {
+        printf(" ");
     }
-    prog->iter++;
-    return current;
+    hinarin_print_recursive(property_name, 0);
+    printf(": ");
+    hinarin_print_recursive(property_value, d->depth);
+
+    d->iter++;
+    return true;
 }
 
-size_t headers_to_jerry_object(char *buffer, size_t size, size_t nitems, jerry_value_t *object) {
-    size_t processed = size * nitems;
-    int keylen = 0;
-    int seplen = 0;
-    int valuelen = 0;
-
-    for (size_t i = 0; i < processed; i++) {
-        if (seplen == 0) {
-            if (buffer[i] == ':') {
-                seplen = 1;
-            } else {
-                keylen++;
-            }
-        } else if (valuelen == 0) {
-            if (buffer[i] != ' ') {
-                valuelen++;
-            } else {
-                seplen++;
-            }
-        } else if (buffer[i] != '\r' && buffer[i] != '\n') {
-            valuelen++;
+void hinarin_print_recursive(jerry_value_t value, int currentdepth){
+    if (jerry_value_has_error_flag(value)) {
+        jerry_error_t err = jerry_get_error_type(value);
+        switch (err) {
+            case JERRY_ERROR_COMMON:
+                printf("Error");
+                if (jerry_value_is_string(err)) {
+                    hinarin_string(err, errmsg);
+                    printf(": %s", errmsg);
+                }
+                break;
+            case JERRY_ERROR_EVAL:
+                printf("EvalError");
+                break;
+            case JERRY_ERROR_RANGE:
+                printf("RangeError");
+                break;
+            case JERRY_ERROR_REFERENCE:
+                printf("ReferenceError");
+                break;
+            case JERRY_ERROR_SYNTAX:
+                printf("SyntaxError");
+                break;
+            case JERRY_ERROR_TYPE:
+                printf("TypeError");
+                break;
+            case JERRY_ERROR_URI:
+                printf("URIError");
+                break;
         }
-    }
-    if (keylen > 0 && valuelen > 0) {
-        jerry_value_t key = jerry_create_string_sz((const jerry_char_t *) buffer, (jerry_size_t) keylen);
-        jerry_value_t value = jerry_create_string_sz((const jerry_char_t *) buffer + keylen + seplen, (jerry_size_t) valuelen);
-        js_register_prop(*object, key, value);
-        jerry_release_value(key);
-        jerry_release_value(value);
-    }
+    } else if (jerry_value_is_number(value)) {
+        printf("%g",jerry_get_number_value(value));
+    } else if (jerry_value_is_string(value)) {
+        hinarin_string(value, text);
+        printf("\"%s\"", text);
+    } else if (jerry_value_is_null(value)) {
+        printf("null");
+    } else if (jerry_value_is_undefined(value)) {
+        printf("undefined");
+    } else if (jerry_value_is_boolean(value)) {
+        bool val = jerry_get_boolean_value(value);
+        printf(val ? "true" : "false");
+    } else if (jerry_value_is_function(value)) {
+        printf("function () { ... }");
+    } else if (jerry_value_is_array(value)) {
+        printf("[");
+        for(uint32_t idx = 0; idx < jerry_get_array_length(value); idx++) {
+            if (idx > 0) {
+                printf(",");
+            }
+            printf("\n");
+            for (int i = 0; i < currentdepth+2; i++) {
+                printf(" ");
+            }
+            jerry_value_t el = jerry_get_property_by_index(value, idx);
+            hinarin_print_recursive(el, currentdepth+2);
+            jerry_release_value(el);
+        }
+        printf("\n");
+        for (int i = 0; i < currentdepth; i++) {
+            printf(" ");
+        }
+        printf("]");
+    } else if (jerry_value_is_object(value)) {
+        printf("{");
+        depth_iter_t d;
+        d.depth = currentdepth+2;
+        d.iter = 0;
+        jerry_foreach_object_property(value, foreach_print, &d);
 
-    return processed;
+        printf("\n");
+        for (int i = 0; i < currentdepth; i++) {
+            printf(" ");
+        }
+        printf("}");
+    }
 }
 
-size_t get_homepath(char *homepath, size_t size) {
+void hinarin_print(jerry_value_t value) {
+    hinarin_print_recursive(value, 0);
+    printf("\n");
+}
+
+void hinarin_set_name_value(jerry_value_t parent, const char *keyname, jerry_value_t value) {
+    hinarin_set_release_key(parent, jerry_create_string((const jerry_char_t *) keyname), value);
+}
+
+void hinarin_set_name_bool(jerry_value_t parent, const char *keyname, bool value) {
+    hinarin_set_release_key(parent, jerry_create_string((const jerry_char_t *) keyname), jerry_create_boolean(value));
+}
+
+void hinarin_set_name_string(jerry_value_t parent, const char *keyname, char *value) {
+    hinarin_set_release_key(parent, jerry_create_string((const jerry_char_t *) keyname), jerry_create_string((const jerry_char_t *) value));
+}
+
+void hinarin_set_name_number(jerry_value_t parent, const char *keyname, double value) {
+    hinarin_set_release_key(parent, jerry_create_string((const jerry_char_t *) keyname), jerry_create_number(value));
+}
+
+void hinarin_set_name_function(jerry_value_t parent, const char *keyname, jerry_external_handler_t value, void *context) {
+    jerry_value_t func = jerry_create_external_function(value);
+    jerry_set_object_native_pointer(func, context, NULL);
+    hinarin_set_release_key(parent, jerry_create_string((const jerry_char_t *) keyname), func);
+    jerry_release_value(func);
+}
+
+void hinarin_set_name_null(jerry_value_t parent, const char *keyname) {
+    hinarin_set_release(parent, jerry_create_string((const jerry_char_t *) keyname), jerry_create_null());
+}
+
+void hinarin_set_name_undefined(jerry_value_t parent, const char *keyname) {
+    hinarin_set_release(parent, jerry_create_string((const jerry_char_t *) keyname), jerry_create_undefined());
+}
+
+void hinarin_unset_release(jerry_value_t parent, jerry_value_t releasekey) {
+    jerry_delete_property(parent, releasekey);
+    jerry_release_value(releasekey);
+}
+
+void hinarin_unset_name(jerry_value_t parent, const char *keyname) {
+    hinarin_unset_release(parent, jerry_create_string((const jerry_char_t *) keyname));
+}
+
+void hinarin_set_release(jerry_value_t parent, jerry_value_t releasekey, jerry_value_t releasevalue) {
+    jerry_release_value(jerry_set_property(parent, releasekey, releasevalue));
+    jerry_release_value(releasekey);
+    jerry_release_value(releasevalue);
+}
+
+void hinarin_set_release_key(jerry_value_t parent, jerry_value_t releasekey, jerry_value_t value) {
+    jerry_release_value(jerry_set_property(parent, releasekey, value));
+    jerry_release_value(releasekey);
+}
+
+void hinarin_set_release_value(jerry_value_t parent, jerry_value_t key, jerry_value_t releasevalue) {
+    jerry_release_value(jerry_set_property(parent, key, releasevalue));
+    jerry_release_value(releasevalue);
+}
+
+void hinarin_set_name_release(jerry_value_t parent, const char *keyname, jerry_value_t releasevalue) {
+    hinarin_set_release(parent, jerry_create_string((const jerry_char_t *) keyname), releasevalue);
+}
+
+size_t hinarin_string_size_release(jerry_value_t releasevalue) {
+    size_t size = jerry_get_string_size(releasevalue);
+    jerry_release_value(releasevalue);
+    return size;
+}
+
+size_t hinarin_string_to_buffer_release(jerry_value_t releasevalue, char *buf, size_t buflen) {
+    size_t size = jerry_string_to_char_buffer(releasevalue, (jerry_char_t *) buf, (jerry_size_t) buflen);
+    jerry_release_value(releasevalue);
+    return size;
+}
+
+jerry_value_t hinarin_get_release(jerry_value_t parent, jerry_value_t releasekey) {
+    jerry_value_t value = jerry_get_property(parent, releasekey);
+    jerry_release_value(releasekey);
+    return value;
+}
+
+bool hinarin_get_release_bool(jerry_value_t parent, jerry_value_t releasekey) {
+    jerry_value_t value = jerry_get_property(parent, releasekey);
+    jerry_release_value(releasekey);
+    bool result = jerry_get_boolean_value(value);
+    jerry_release_value(value);
+    return result;
+}
+
+double hinarin_get_release_number(jerry_value_t parent, jerry_value_t releasekey) {
+    jerry_value_t value = jerry_get_property(parent, releasekey);
+    jerry_release_value(releasekey);
+    double result = jerry_get_number_value(value);
+    jerry_release_value(value);
+    return result;
+}
+
+jerry_value_t hinarin_get_index_release(jerry_value_t releasevalue, uint32_t index) {
+    jerry_value_t value = jerry_get_property_by_index(releasevalue, index);
+    jerry_release_value(releasevalue);
+    return value;
+}
+
+bool hinarin_get_index_bool(jerry_value_t parent, uint32_t index) {
+    jerry_value_t value = jerry_get_property_by_index(parent, index);
+    bool result = jerry_get_boolean_value(value);
+    jerry_release_value(value);
+    return result;
+}
+
+double hinarin_get_index_number(jerry_value_t parent, uint32_t index) {
+    jerry_value_t value = jerry_get_property_by_index(parent, index);
+    double result = jerry_get_number_value(value);
+    jerry_release_value(value);
+    return result;
+}
+
+jerry_value_t hinarin_get_name(jerry_value_t parent, const char* keyname) {
+    jerry_value_t value = hinarin_get_release(parent, jerry_create_string((const jerry_char_t *) keyname));
+    return value;
+}
+
+bool hinarin_get_name_bool(jerry_value_t parent, const char *keyname) {
+    jerry_value_t value = hinarin_get_release(parent, jerry_create_string((const jerry_char_t *) keyname));
+    bool result = jerry_get_boolean_value(value);
+    jerry_release_value(value);
+    return result;
+}
+
+double hinarin_get_name_number(jerry_value_t parent, const char* keyname) {
+    jerry_value_t value = hinarin_get_release(parent, jerry_create_string((const jerry_char_t *) keyname));
+    double result = jerry_get_number_value(value);
+    jerry_release_value(value);
+    return result;
+}
+
+
+int hinarin_mkdir(const char *path) {
 #ifdef _WIN32
-    return (size_t) snprintf(homepath, size, "file://localhost/%s%s/.hinarin/modules/", getenv("HOMEDRIVE"), getenv("HOMEPATH"));
+    return _mkdir(path);
 #else
-    return (size_t) snprintf(homepath, size, "file://localhost/%s/.hinarin/modules/", getenv("HOME"));
+    return mkdir(path, 0700);
 #endif
 }
 
-void cross_mkdir(const char *path) {
-#ifdef _WIN32
-    _mkdir(path);
-#else
-    mkdir(path, 0700);
-#endif
-}
-
-void mkdir_p(char* path) {
-    if (mkdir_basedir(path)) {
-        cross_mkdir(path);
+int hinarin_mkdir_recursive(const char *path) {
+    if (hinarin_mkdir_basedir_recursive(path)) {
+        hinarin_mkdir(path);
     }
 }
 
-int mkdir_basedir(char *path) {
+int hinarin_mkdir_basedir_recursive(const char *path) {
     int last = 0;
-    for (char *c = path; *c != '\0'; c++) {
+    for (char *c = (char *) path; *c != '\0'; c++) {
         if (last && *c == '/') {
             *c = '\0';
-            cross_mkdir(path);
+            hinarin_mkdir(path);
             *c = '/';
             last = 0;
         } else {
@@ -119,137 +314,199 @@ int mkdir_basedir(char *path) {
     return last;
 }
 
-jerry_value_t download_to_file(const char *url, char *localfile, progress_func progress) {
-    mkdir_basedir(localfile);
-    jerry_value_t response = jerry_create_object();
+size_t hinarin_homedir(char *buf, size_t buflen) {
+#ifdef _WIN32
+    size_t len = (size_t) snprintf(buf, buflen, "/%s%s", getenv("HOMEDRIVE"), getenv("HOMEPATH"));
+#else
+    size_t len = (size_t) snprintf(buf, buflen, "%s", getenv("HOME"));
+#endif
+    for (int i = 0; i < len; i++) {
+        if (buf[i] == '\\') {
+            buf[i] = '/';
+        }
+    }
+    return len;
+}
 
-    progress_t prog = { 0 };
-    prog.headers = jerry_create_object();
-    prog.progress = progress;
-    prog.file = fopen(localfile, "a");
-    prog.curl = curl_easy_init();
-    curl_easy_setopt(prog.curl, CURLOPT_URL, url);
-    curl_easy_setopt(prog.curl, CURLOPT_WRITEFUNCTION, writer_to_file_progress);
-    curl_easy_setopt(prog.curl, CURLOPT_WRITEDATA, &prog);
-    curl_easy_setopt(prog.curl, CURLOPT_HEADERFUNCTION, headers_to_jerry_object);
-    curl_easy_setopt(prog.curl, CURLOPT_HEADERDATA, &prog.headers);
-    CURLcode err = curl_easy_perform(prog.curl);
-    long response_code;
-    curl_easy_getinfo(prog.curl, CURLINFO_RESPONSE_CODE, &response_code);
+typedef struct {
+    void *curl;
+    hinarin_writefunc writefunc;
+    hinarin_progressfunc progressfunc;
+    void *writefunc_data;
+    void *progressfunc_data;
+    ssize_t total;
+    size_t processed;
+} hinarin_download_t;
+
+static size_t curl_writefunc(void *ptr, size_t size, size_t n, void *data) {
+    size_t length = size * n;
+    hinarin_download_t *download = data;
+    if (download->processed == 0) {
+        curl_easy_getinfo(download->curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &download->total);
+    }
+
+    if (download->progressfunc) {
+        download->progressfunc(download->processed, download->total, download->progressfunc_data);
+    }
+    if (download->writefunc) {
+        download->processed += download->writefunc(ptr, length, download->writefunc_data);
+    } else {
+        download->processed += length;
+    }
+}
+
+static size_t curl_headerfunc(char *ptr, size_t size, size_t n, void *data) {
+    size_t length = size * n;
+    jerry_value_t *headers = data;
+
+    int keylen = 0;
+    int seplen = 0;
+    int valuelen = 0;
+
+    for (size_t i = 0; i < length; i++) {
+        if (seplen == 0) {
+            if (ptr[i] == ':') {
+                seplen = 1;
+            } else {
+                keylen++;
+            }
+        } else if (valuelen == 0) {
+            if (ptr[i] != ' ') {
+                valuelen++;
+            } else {
+                seplen++;
+            }
+        } else if (ptr[i] != '\r' && ptr[i] != '\n') {
+            valuelen++;
+        }
+    }
+
+    if (keylen > 0 && valuelen > 0) {
+        jerry_value_t key = jerry_create_string_sz((const jerry_char_t *) ptr, (jerry_size_t) keylen);
+        jerry_value_t value = jerry_create_string_sz((const jerry_char_t *) ptr+ keylen + seplen, (jerry_size_t) valuelen);
+        hinarin_set_release(*headers, key, value);
+    }
+
+    return length;
+}
+
+static bool headers_foreach(const jerry_value_t property_name, const jerry_value_t property_value, void *data) {
+    struct curl_slist **sendheaders_list = data;
+    hinarin_string(property_name, key);
+    hinarin_string(property_value, value);
+
+    char buf[1024];
+    snprintf(buf, sizeof(buf), "%s: %s", key, value);
+
+    *sendheaders_list = curl_slist_append(*sendheaders_list, buf);
+    return true;
+}
+
+static size_t hinarin_write_to_file(void *ptr, size_t length, void *data) {
+    FILE *file = data;
+    return fwrite(ptr, length, 1, file) * length;
+}
+
+jerry_value_t hinarin_download(const char *url, jerry_value_t *sendheaders, jerry_value_t *sendcookies, hinarin_writefunc writefunc, void *writefunc_data, hinarin_progressfunc progressfunc, void *progressfunc_data) {
+    hinarin_download_t download;
+    download.total = 0;
+    download.processed = 0;
+    download.writefunc = writefunc;
+    download.writefunc_data = writefunc_data;
+    download.progressfunc = progressfunc;
+    download.progressfunc_data = progressfunc_data;
+    download.curl = curl_easy_init();
+    jerry_value_t result = jerry_create_object();
+    jerry_value_t headers = jerry_create_object();
+    jerry_value_t cookies = jerry_create_object();
+
+    struct curl_slist *sendheaders_list = NULL;
+    if (sendheaders) {
+        jerry_foreach_object_property(*sendheaders, headers_foreach, &sendheaders_list);
+        curl_easy_setopt(download.curl, CURLOPT_HTTPHEADER, sendheaders_list);
+    }
+
+    printf("Downloading %s", url);
+    if (strlen(url) > 7 && strncmp("file://", url, 7) == 0) {
+        char homepath[1024];
+        hinarin_homedir(homepath, sizeof(homepath));
+        char urlpath[1024];
+        snprintf(urlpath, sizeof(urlpath), "file://localhost%s/.hinarin/modules/%s", homepath, url+7);
+        curl_easy_setopt(download.curl, CURLOPT_URL, urlpath);
+        printf(" (-> %s)", urlpath);
+    } else {
+        curl_easy_setopt(download.curl, CURLOPT_URL, url);
+    }
+    printf(" ... ");
+    curl_easy_setopt(download.curl, CURLOPT_WRITEFUNCTION, curl_writefunc);
+    curl_easy_setopt(download.curl, CURLOPT_WRITEDATA, &download);
+    curl_easy_setopt(download.curl, CURLOPT_HEADERFUNCTION, curl_headerfunc);
+    curl_easy_setopt(download.curl, CURLOPT_HEADERDATA, &headers);
+    CURLcode err = curl_easy_perform(download.curl);
+    long code;
+    curl_easy_getinfo(download.curl, CURLINFO_RESPONSE_CODE, &code);
+    curl_easy_getinfo(download.curl, CURLINFO_RESPONSE_CODE, &code);
     struct curl_slist *cookielist, *nc;
-    curl_easy_getinfo(prog.curl, CURLINFO_COOKIELIST, &cookielist);
-    js_register_double(response, "code", response_code);
-    js_register_double(response, "error", err);
-    js_register_prop_name(response, "headers", prog.headers);
-    jerry_release_value(prog.headers);
+    curl_easy_getinfo(download.curl, CURLINFO_COOKIELIST, &cookielist);
     nc = cookielist;
+
     while (nc) {
-        printf("%s\n", nc->data);
+        printf("!!! %s\n", nc->data);
         nc = nc->next;
     }
+
+    if (download.progressfunc) {
+        download.progressfunc(download.processed, download.total, download.progressfunc_data);
+    }
+
+    curl_easy_cleanup(download.curl);
+    curl_slist_free_all(sendheaders_list);
     curl_slist_free_all(cookielist);
 
-    curl_easy_cleanup(prog.curl);
-    fclose(prog.file);
+    hinarin_set_name_release(result, "headers", headers);
+    hinarin_set_name_release(result, "cookies", cookies);
+    hinarin_set_name_number(result, "error", err);
+    hinarin_set_name_number(result, "code", code);
+    printf("%ld processed %ld bytes, error #%d\n", code, download.processed, err);
 
-    return response;
+    hinarin_set_name_number(result, "processed", download.processed);
+    return result;
 }
 
-void js_register_prop(jerry_value_t parent, jerry_value_t prop_name, jerry_value_t value) {
-    jerry_value_t result = jerry_set_property(parent, prop_name, value);
-    jerry_release_value(result);
+jerry_value_t hinarin_download_to_file(const char *url, const char *filepath, jerry_value_t *sendheaders, jerry_value_t *sendcookies, hinarin_progressfunc progressfunc, void *progressfunc_data) {
+    hinarin_mkdir_basedir_recursive(filepath);
+    FILE *file = fopen(filepath, "a");
+    jerry_value_t value = hinarin_download(url, sendheaders, sendcookies, hinarin_write_to_file, file, progressfunc, progressfunc_data);
+    fclose(file);
+    return value;
 }
 
-void js_register_prop_name(jerry_value_t parent, const char *prop_name, jerry_value_t value) {
-    jerry_value_t prop = jerry_create_string((const jerry_char_t *) prop_name);
-    js_register_prop(parent, prop, value);
-    jerry_release_value(prop);
+typedef struct {
+    char *buf;
+    size_t len;
+} string_t;
+
+static size_t hinarin_write_to_string(void *ptr, size_t length, void *data) {
+    string_t *str = data;
+    str->len += length;
+    str->buf = realloc(str->buf, str->len+1);
+    memmove(str->buf+str->len-length, ptr, length);
+    str->buf[str->len] = '\0';
+    return length;
 }
 
-void js_register_function(jerry_value_t parent, const char *name, jerry_external_handler_t handler, void *data) {
-    jerry_value_t func_obj = jerry_create_external_function(handler);
-    js_register_prop_name(parent, name, func_obj);
-    jerry_set_object_native_pointer(func_obj, data, NULL);
-    jerry_release_value(func_obj);
-}
-
-void js_register_double(jerry_value_t parent, const char *name, double value) {
-    jerry_value_t number_obj = jerry_create_number(value);
-    js_register_prop_name(parent, name, number_obj);
-    jerry_release_value(number_obj);
-}
-
-void js_register_bool(jerry_value_t parent, const char *name, bool value) {
-    jerry_value_t bool_obj = jerry_create_boolean(value);
-    js_register_prop_name(parent, name, bool_obj);
-    jerry_release_value(bool_obj);
-}
-
-jerry_value_t js_create_abort(const char *message) {
-    jerry_value_t error_obj = jerry_create_error(JERRY_ERROR_COMMON, (const jerry_char_t *) message);
-    jerry_value_set_abort_flag(&error_obj);
-    return error_obj;
-}
-
-double js_to_double(jerry_value_t value) {
-    jerry_value_t dbl = jerry_value_to_number(value);
-    double data = jerry_get_number_value(dbl);
-    jerry_release_value(dbl);
-    return data;
-}
-
-bool js_to_bool(jerry_value_t value) {
-    return jerry_value_to_boolean(value);
-}
-
-jerry_value_t js_prop(jerry_value_t value, const char *name) {
-    jerry_value_t obj = jerry_value_to_object(value);
-    jerry_value_t prop_obj = jerry_create_string((const jerry_char_t *) name);
-
-    jerry_value_t prop = jerry_get_property(obj, prop_obj);
-
-    jerry_release_value(prop_obj);
-    jerry_release_value(obj);
-
-    return prop;
-}
-
-double js_prop_double(jerry_value_t value, const char *name) {
-    jerry_value_t prop = js_prop(value, name);
-
-    double dbl = js_to_double(prop);
-
-    jerry_release_value(prop);
-
-    return dbl;
-}
-
-bool js_prop_bool(jerry_value_t value, const char *name) {
-    jerry_value_t prop = js_prop(value, name);
-
-    bool bln = js_to_bool(prop);
-
-    jerry_release_value(prop);
-
-    return bln;
-}
-
-void js_print(jerry_value_t value) {
-    jerry_value_t str = jerry_value_to_string(value);
-    js_define_string(str, text);
-    printf("%s\n", (char *) text);
-    jerry_release_value(str);
-}
-
-bool js_iter_print(const jerry_value_t property_name, const jerry_value_t property_value, void *user_data_p) {
-    js_define_string(property_name, name);
-    printf("%s: ", (char *) name);
-    if (jerry_value_is_object(property_value)) {
-        printf("{\n");
-        jerry_foreach_object_property(property_value, js_iter_print, NULL);
-        printf("}\n");
+jerry_value_t hinarin_download_to_data(const char *url, jerry_value_t *sendheaders, jerry_value_t *sendcookies, hinarin_progressfunc progressfunc, void *progressfunc_data) {
+    string_t str;
+    str.buf = 0;
+    str.len = 0;
+    jerry_value_t value = hinarin_download(url, sendheaders, sendcookies, hinarin_write_to_string, &str, progressfunc, progressfunc_data);
+    if (str.buf) {
+        jerry_value_t string = jerry_create_string((const jerry_char_t *) str.buf);
+        hinarin_set_name_release(value, "data", string);
+        free(str.buf);
     } else {
-        js_print(property_value);
+        hinarin_set_name_release(value, "data", jerry_create_string((const jerry_char_t *) ""));
     }
-    return true;
+
+    return value;
 }
