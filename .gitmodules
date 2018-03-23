@@ -4,9 +4,6 @@
 [submodule "libs/nuklear"]
 	path = libs/nuklear
 	url = https://github.com/vurtun/nuklear
-[submodule "libs/jerryscript"]
-	path = libs/jerryscript
-	url = https://github.com/jerryscript-project/jerryscript
 [submodule "libs/glfw"]
 	path = libs/glfw
 	url = https://github.com/glfw/glfw
@@ -22,3 +19,6 @@
 [submodule "libs/pthread-win32"]
 	path = libs/pthread-win32
 	url = https://github.com/GerHobbelt/pthread-win32
+[submodule "libs/moddable"]
+	path = libs/moddable
+	url = https://github.com/Moddable-OpenSource/moddable

@@ -16,7 +16,7 @@
 #include <string.h>
 #include <nuklear_glfw_gl3.h>
 
-static struct nk_rect get_rect(jerry_value_t value) {
+static struct nk_rect to_rect(jerry_value_t value) {
     double x = hinarin_get_name_number(value, "x");
     double y = hinarin_get_name_number(value, "y");
     double w = hinarin_get_name_number(value, "w");
@@ -24,16 +24,30 @@ static struct nk_rect get_rect(jerry_value_t value) {
     return nk_rect((float) x, (float) y, (float) w, (float) h);
 }
 
-/*
-
 static jerry_value_t from_rect(struct nk_rect rect) {
     jerry_value_t object = jerry_create_object();
-    js_register_double(object, "x", rect.x);
-    js_register_double(object, "y", rect.y);
-    js_register_double(object, "w", rect.w);
-    js_register_double(object, "h", rect.h);
+    hinarin_set_name_number(object, "x", rect.x);
+    hinarin_set_name_number(object, "y", rect.y);
+    hinarin_set_name_number(object, "w", rect.w);
+    hinarin_set_name_number(object, "h", rect.h);
     return object;
 }
+
+static struct nk_vec2 to_vec(jerry_value_t value) {
+    double x = hinarin_get_name_number(value, "x");
+    double y = hinarin_get_name_number(value, "y");
+    return nk_vec2((float) x, (float) y);
+}
+
+static jerry_value_t from_vec(struct nk_vec2 vec) {
+    jerry_value_t object = jerry_create_object();
+    hinarin_set_name_number(object, "x", vec.x);
+    hinarin_set_name_number(object, "y", vec.y);
+    return object;
+}
+
+/*
+
 
 static struct nk_vec2 get_vec2(jerry_value_t value) {
     double x = js_prop_double(value, "x");
@@ -1000,6 +1014,14 @@ static void functions(jerry_value_t nuklear, struct nk_context *ctx) {
 }
 */
 
+
+hinarin_function(hinarin_nuklear_item_is_any_active) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    return jerry_create_boolean(nk_item_is_any_active(ctx) != 0);
+}
+
 hinarin_function(hinarin_nuklear_begin) {
     if (args_count < 3) {
         return hinarin_create_error("begin must have 3 args: (title, rect, flags)");
@@ -1009,7 +1031,7 @@ hinarin_function(hinarin_nuklear_begin) {
     jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
 
     hinarin_string(args[0], title);
-    struct nk_rect rect = get_rect(args[1]);
+    struct nk_rect rect = to_rect(args[1]);
     double flags = jerry_get_number_value(args[2]);
 
     return jerry_create_boolean(nk_begin(ctx, title, rect, (nk_flags) flags) != 0);
@@ -1025,7 +1047,7 @@ hinarin_function(hinarin_nuklear_begin_titled) {
 
     hinarin_string(args[0], name);
     hinarin_string(args[1], title);
-    struct nk_rect rect = get_rect(args[2]);
+    struct nk_rect rect = to_rect(args[2]);
     double flags = jerry_get_number_value(args[3]);
 
     return jerry_create_boolean(nk_begin_titled(ctx, name, title, rect, (nk_flags) flags) != 0);
@@ -1040,6 +1062,142 @@ hinarin_function(hinarin_nuklear_end) {
     return jerry_create_undefined();
 }
 
+hinarin_function(hinarin_nuklear_window_get_bounds) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    return from_rect(nk_window_get_bounds(ctx));
+}
+
+hinarin_function(hinarin_nuklear_window_get_position) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    return from_vec(nk_window_get_position(ctx));
+}
+
+hinarin_function(hinarin_nuklear_window_get_size) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    return from_vec(nk_window_get_size(ctx));
+}
+
+hinarin_function(hinarin_nuklear_window_get_width) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    return jerry_create_number(nk_window_get_width(ctx));
+}
+
+hinarin_function(hinarin_nuklear_window_get_height) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    return jerry_create_number(nk_window_get_height(ctx));
+}
+
+hinarin_function(hinarin_nuklear_window_get_content_region) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    return from_rect(nk_window_get_content_region(ctx));
+}
+
+hinarin_function(hinarin_nuklear_window_get_content_region_min) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    return from_vec(nk_window_get_content_region_min(ctx));
+}
+
+hinarin_function(hinarin_nuklear_window_get_content_region_max) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    return from_vec(nk_window_get_content_region_max(ctx));
+}
+
+hinarin_function(hinarin_nuklear_window_get_content_region_size) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    return from_vec(nk_window_get_content_region_size(ctx));
+}
+
+hinarin_function(hinarin_nuklear_window_has_focus) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    return jerry_create_boolean(nk_window_has_focus(ctx) != 0);
+}
+
+hinarin_function(hinarin_nuklear_window_is_hovered) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    return jerry_create_boolean(nk_window_is_hovered(ctx) != 0);
+}
+
+hinarin_function(hinarin_nuklear_window_is_collapsed) {
+    if (args_count < 1) {
+        return hinarin_create_error("window_is_collapsed must have 1 arg: (name)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+
+    return jerry_create_boolean(nk_window_is_collapsed(ctx, name) != 0);
+}
+
+hinarin_function(hinarin_nuklear_window_is_closed) {
+    if (args_count < 1) {
+        return hinarin_create_error("window_is_closed must have 1 arg: (name)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+
+    return jerry_create_boolean(nk_window_is_closed(ctx, name) != 0);
+}
+
+hinarin_function(hinarin_nuklear_window_is_hidden) {
+    if (args_count < 1) {
+        return hinarin_create_error("window_is_hidden must have 1 arg: (name)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+
+    return jerry_create_boolean(nk_window_is_hidden(ctx, name) != 0);
+}
+
+hinarin_function(hinarin_nuklear_window_is_active) {
+    if (args_count < 1) {
+        return hinarin_create_error("window_is_active must have 1 arg: (name)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+
+    return jerry_create_boolean(nk_window_is_active(ctx, name) != 0);
+}
+
+hinarin_function(hinarin_nuklear_window_is_any_hovered) {
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    return jerry_create_boolean(nk_window_is_any_hovered(ctx) != 0);
+}
+
 hinarin_function(hinarin_nuklear_window_set_bounds) {
     if (args_count < 2) {
         return hinarin_create_error("window_set_bounds must have 2 args: (name, rect)");
@@ -1047,11 +1205,139 @@ hinarin_function(hinarin_nuklear_window_set_bounds) {
     
     struct nk_context *ctx;
     jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
-
+    
     hinarin_string(args[0], name);
-    struct nk_rect rect = get_rect(args[1]);
+    struct nk_rect rect = to_rect(args[1]);
     
     nk_window_set_bounds(ctx, name, rect);
+
+    return jerry_create_undefined();
+}
+
+hinarin_function(hinarin_nuklear_window_set_position) {
+    if (args_count < 2) {
+        return hinarin_create_error("window_set_position must have 2 args: (name, vec)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+    struct nk_vec2 vec = to_vec(args[1]);
+
+    nk_window_set_position(ctx, name, vec);
+
+    return jerry_create_undefined();
+}
+
+hinarin_function(hinarin_nuklear_window_set_size) {
+    if (args_count < 2) {
+        return hinarin_create_error("window_set_size must have 2 args: (name, vec)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+    struct nk_vec2 vec = to_vec(args[1]);
+
+    nk_window_set_size(ctx, name, vec);
+
+    return jerry_create_undefined();
+}
+
+hinarin_function(hinarin_nuklear_window_set_focus) {
+    if (args_count < 1) {
+        return hinarin_create_error("window_set_focus must have 1 arg: (name)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+
+    nk_window_set_focus(ctx, name);
+
+    return jerry_create_undefined();
+}
+
+hinarin_function(hinarin_nuklear_window_close) {
+    if (args_count < 1) {
+        return hinarin_create_error("window_close must have 1 arg: (name)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+
+    nk_window_close(ctx, name);
+
+    return jerry_create_undefined();
+}
+
+hinarin_function(hinarin_nuklear_window_collapse) {
+    if (args_count < 2) {
+        return hinarin_create_error("window_collapse must have 2 args: (name, state)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+    bool boolean = jerry_get_boolean_value(args[1]);
+
+    nk_window_collapse(ctx, name, boolean ? NK_MINIMIZED : NK_MAXIMIZED);
+
+    return jerry_create_undefined();
+}
+
+hinarin_function(hinarin_nuklear_window_collapse_if) {
+    if (args_count < 3) {
+        return hinarin_create_error("window_collapse_if must have 3 args: (name, state, commit)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+    bool boolean = jerry_get_boolean_value(args[1]);
+    bool commit = jerry_get_boolean_value(args[2]);
+
+    nk_window_collapse_if(ctx, name, boolean ? NK_MINIMIZED : NK_MAXIMIZED, commit);
+
+    return jerry_create_undefined();
+}
+
+hinarin_function(hinarin_nuklear_window_show) {
+    if (args_count < 2) {
+        return hinarin_create_error("window_show must have 2 args: (name, state)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+    bool boolean = jerry_get_boolean_value(args[1]);
+
+    nk_window_show(ctx, name, boolean ? NK_SHOWN : NK_HIDDEN);
+
+    return jerry_create_undefined();
+}
+
+hinarin_function(hinarin_nuklear_window_show_if) {
+    if (args_count < 3) {
+        return hinarin_create_error("window_show_if must have 3 args: (name, state, commit)");
+    }
+
+    struct nk_context *ctx;
+    jerry_get_object_native_pointer(function_obj, (void **) &ctx, NULL);
+
+    hinarin_string(args[0], name);
+    bool boolean = jerry_get_boolean_value(args[1]);
+    bool commit = jerry_get_boolean_value(args[2]);
+
+    nk_window_show_if(ctx, name, boolean ? NK_SHOWN : NK_HIDDEN, commit);
 
     return jerry_create_undefined();
 }
@@ -1068,10 +1354,38 @@ jerry_value_t hinarin_nuklear_binding(GLFWwindow *window) {
     jerry_value_t nuklear_window = jerry_create_object();
     jerry_set_object_native_pointer(nuklear_window, ctx, NULL);
 
+    hinarin_set_name_function(nuklear_window, "item_is_any_active", hinarin_nuklear_item_is_any_active, ctx);
+
     hinarin_set_name_function(nuklear_window, "begin", hinarin_nuklear_begin, ctx);
     hinarin_set_name_function(nuklear_window, "begin_titled", hinarin_nuklear_begin_titled, ctx);
     hinarin_set_name_function(nuklear_window, "end", hinarin_nuklear_end, ctx);
+
+    hinarin_set_name_function(nuklear_window, "window_get_bounds", hinarin_nuklear_window_get_bounds, ctx);
+    hinarin_set_name_function(nuklear_window, "window_get_position", hinarin_nuklear_window_get_position, ctx);
+    hinarin_set_name_function(nuklear_window, "window_get_size", hinarin_nuklear_window_get_size, ctx);
+    hinarin_set_name_function(nuklear_window, "window_get_width", hinarin_nuklear_window_get_width, ctx);
+    hinarin_set_name_function(nuklear_window, "window_get_height", hinarin_nuklear_window_get_height, ctx);
+    hinarin_set_name_function(nuklear_window, "window_get_content_region", hinarin_nuklear_window_get_content_region, ctx);
+    hinarin_set_name_function(nuklear_window, "window_get_content_region_min", hinarin_nuklear_window_get_content_region_min, ctx);
+    hinarin_set_name_function(nuklear_window, "window_get_content_region_max", hinarin_nuklear_window_get_content_region_max, ctx);
+    hinarin_set_name_function(nuklear_window, "window_get_content_region_size", hinarin_nuklear_window_get_content_region_size, ctx);
+    hinarin_set_name_function(nuklear_window, "window_has_focus", hinarin_nuklear_window_has_focus, ctx);
+    hinarin_set_name_function(nuklear_window, "window_is_hovered", hinarin_nuklear_window_is_hovered, ctx);
+    hinarin_set_name_function(nuklear_window, "window_is_collapsed", hinarin_nuklear_window_is_collapsed, ctx);
+    hinarin_set_name_function(nuklear_window, "window_is_closed", hinarin_nuklear_window_is_closed, ctx);
+    hinarin_set_name_function(nuklear_window, "window_is_hidden", hinarin_nuklear_window_is_hidden, ctx);
+    hinarin_set_name_function(nuklear_window, "window_is_active", hinarin_nuklear_window_is_active, ctx);
+    hinarin_set_name_function(nuklear_window, "window_is_any_hovered", hinarin_nuklear_window_is_any_hovered, ctx);
     hinarin_set_name_function(nuklear_window, "window_set_bounds", hinarin_nuklear_window_set_bounds, ctx);
+    hinarin_set_name_function(nuklear_window, "window_set_position", hinarin_nuklear_window_set_position, ctx);
+    hinarin_set_name_function(nuklear_window, "window_set_size", hinarin_nuklear_window_set_size, ctx);
+    hinarin_set_name_function(nuklear_window, "window_set_focus", hinarin_nuklear_window_set_focus, ctx);
+    hinarin_set_name_function(nuklear_window, "window_close", hinarin_nuklear_window_close, ctx);
+    hinarin_set_name_function(nuklear_window, "window_collapse", hinarin_nuklear_window_collapse, ctx);
+    hinarin_set_name_function(nuklear_window, "window_collapse_if", hinarin_nuklear_window_collapse_if, ctx);
+    hinarin_set_name_function(nuklear_window, "window_show", hinarin_nuklear_window_show, ctx);
+    hinarin_set_name_function(nuklear_window, "window_show_if", hinarin_nuklear_window_show_if, ctx);
+
 
     return nuklear_window;
 }
