@@ -24,6 +24,11 @@
 #include <pthread.h>
 #include <xs.h>
 
+typedef struct linked_slot {
+    xsSlot slot;
+    struct linked_slot *next;
+} linked_slot;
+
 typedef struct {
     GLFWwindow *window;
     pthread_t init_thread;
@@ -34,6 +39,7 @@ typedef struct {
     int ypos;
     uint32_t frame;
     time_t milliseconds;
+    linked_slot *renderers;
 } hinarin_context;
 
 #endif //HINARIN_HINARIN_H

@@ -86,6 +86,11 @@ void hinarin_loop(xsMachine *the) {
         hinarin->frame++;
         hinarin->milliseconds = (te.tv_sec * 1000 + te.tv_usec / 1000) - start;
 
+        for (linked_slot *next = hinarin->renderers; next != NULL; next = next->next) {
+            xsCall1(xsGlobal, xsID("println"), xsGet(next->slot, xsID("render")));
+            xsCallFunction0(xsGet(next->slot, xsID("render")), next->slot);
+        }
+
         nk_glfw3_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
         glfwSwapBuffers(hinarin->window);
         frame++;
@@ -94,6 +99,13 @@ void hinarin_loop(xsMachine *the) {
 
 void hinarin_deinit(xsMachine *the) {
     hinarin_context *hinarin = xsGetContext(the);
+    linked_slot *tail = hinarin->renderers;
+    while (tail != NULL) {
+        linked_slot *next = tail->next;
+        free(tail);
+        tail = next;
+    }
+
     pthread_join(hinarin->init_thread, NULL);
     nk_glfw3_shutdown();
     glfwTerminate();

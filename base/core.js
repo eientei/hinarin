@@ -17,11 +17,10 @@ export function bakeRect({x, y, w, h}) {
         h: bakeProperty(h, window.height)
     };
 }
-
 export class Window {
     static get BORDER() { return nuklear.WINDOW_BORDER; }
     static get MOVABLE() { return nuklear.WINDOW_MOVABLE; }
-    static get SCALABLE() { return nuklear.WINDOW_SCLABLE; }
+    static get SCALABLE() { return nuklear.WINDOW_SCALABLE; }
     static get CLOSABLE() { return nuklear.WINDOW_CLOSABLE; }
     static get MINIMIZABLE() { return nuklear.WINDOW_MINIMIZABLE; }
     static get NO_SCROLLBAR() { return nuklear.WINDOW_NO_SCROLLBAR; }
@@ -31,20 +30,14 @@ export class Window {
     static get SCALE_LEFT() { return nuklear.WINDOW_SCALE_LEFT; }
     static get NO_INPUT() { return nuklear.WINDOW_NO_INPUT; }
 
-    state = {
-        title: 'Untitled',
-        name: undefined,
-        bounds: {x: 0, y: 0, w: 100, h: 100},
-        flags: 0,
-        render: undefined
-    };
-
     constructor({title, name, bounds, flags, render}) {
-        title != null && (this.state.title = title);
-        name != null && (this.state.name = name);
-        bounds != null && (this.state.bounds = bounds);
-        flags != null && (this.state.flags = flags);
-        render != null && (this.state.render = render);
+        this.state = {
+            title: title != null ? title : "Untitled",
+            name: name != null ? name : undefined,
+            bounds: bounds != null ? bounds : {x: 0, y: 0, w: 100, h: 100},
+            flags: flags != null ? flags : 0,
+            render: render != null ? render : undefined
+        };
     }
 
     render() {

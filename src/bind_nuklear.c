@@ -4,8 +4,11 @@
 
 #include "bind_nuklear.h"
 #include "hinarin.h"
+#include <stdlib.h>
 
 void hinarin_nuklear_render_add(xsMachine *the) {
+    hinarin_context *hinarin = xsGetContext(the);
+
     for (xsIntegerValue i = 0; i < xsToInteger(xsArgc); i++) {
         if (!xsHas(xsArg(i), xsID("render")) || !xsIsInstanceOf(xsGet(xsArg(i), xsID("render")), xsFunctionPrototype)) {
             xsTypeError("nuklear.render() arguments must have .render() function on them");
@@ -13,8 +16,24 @@ void hinarin_nuklear_render_add(xsMachine *the) {
         }
     }
 
+    linked_slot *tail = NULL;
+
+    if (hinarin->renderers == NULL) {
+        tail = calloc(1, sizeof(linked_slot));
+    } else {
+        tail = hinarin->renderers;
+        while (tail->next != NULL) {
+            tail = tail->next;
+        }
+    }
     for (xsIntegerValue i = 0; i < xsToInteger(xsArgc); i++) {
-        xsSlot renderFunc = xsGet(xsArg(i), xsID("render"));
+        if (hinarin->renderers == NULL) {
+            hinarin->renderers = tail;
+        } else {
+            tail->next = calloc(1, sizeof(linked_slot));
+            tail = tail->next;
+        }
+        tail->slot = xsArg(i);
     }
 }
 
@@ -453,7 +472,7 @@ void hinarin_bind_nuklear(xsMachine *the) {
     
     xsDefine(nuklear_obj, xsID("begin"), xsNewHostFunction(hinarin_nuklear_begin, 3), xsDontSet | xsDontDelete);
     xsDefine(nuklear_obj, xsID("beginTitled"), xsNewHostFunction(hinarin_nuklear_begin_titled, 4), xsDontSet | xsDontDelete);
-    xsDefine(nuklear_obj, xsID("end"), xsNewHostFunction(hinarin_nuklear_begin, 0), xsDontSet | xsDontDelete);
+    xsDefine(nuklear_obj, xsID("end"), xsNewHostFunction(hinarin_nuklear_end, 0), xsDontSet | xsDontDelete);
 
     xsDefine(nuklear_obj, xsID("windowFind"), xsNewHostFunction(hinarin_nuklear_window_find, 1), xsDontSet | xsDontDelete);
     xsDefine(nuklear_obj, xsID("windowGetBounds"), xsNewHostFunction(hinarin_nuklear_window_get_bounds, 0), xsDontSet | xsDontDelete);

@@ -105,6 +105,7 @@ txID fxFindModule(txMachine* the, txID moduleID, txSlot* slot) {
 
 void fxLoadModule(txMachine* the, txID moduleID) {
     char *name = fxName(the, moduleID);
+    printf("Loading %s\n", name);
     hinarin_string *string = hinarin_string_new();
     hinarin_download_free_result(hinarin_download_to_string(hinarin_download_request_new(name, NULL, NULL), string));
 
