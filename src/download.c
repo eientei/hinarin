@@ -264,8 +264,13 @@ hinarin_download_result *hinarin_download_to_file(hinarin_download_request *requ
 }
 
 hinarin_download_result *hinarin_download_to_exists(hinarin_download_request *request, bool *exists) {
+    bool http = hinarin_string_starts(request->url, "http");
     hinarin_download_result *result = hinarin_download_process(request, NULL, NULL);
-    *exists = result->error == 0;
+    if (http) {
+        *exists = result->code / 100 == 2;
+    } else {
+        *exists = result->error == 0;
+    }
     return result;
 }
 

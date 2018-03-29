@@ -23,7 +23,7 @@ void *hinarin_init_thread(void *data) {
     FILE *f = fopen(path->data, "a");
     fseek(f, 0, SEEK_END);
     if (ftell(f) == 0) {
-        hinarin_download_free_result(hinarin_download_to_file(hinarin_download_request_new("https://raw.githubusercontent.com/eientei/hinarin/master/base/init.js", NULL, NULL), path->data));
+        hinarin_download_free_result(hinarin_download_to_file(hinarin_download_request_new("https://eientei.github.io/hinarin/init.js", NULL, NULL), path->data));
     }
     fclose(f);
     hinarin_string_free(path);
@@ -87,7 +87,6 @@ void hinarin_loop(xsMachine *the) {
         hinarin->milliseconds = (te.tv_sec * 1000 + te.tv_usec / 1000) - start;
 
         for (linked_slot *next = hinarin->renderers; next != NULL; next = next->next) {
-            xsCall1(xsGlobal, xsID("println"), xsGet(next->slot, xsID("render")));
             xsCallFunction0(xsGet(next->slot, xsID("render")), next->slot);
         }
 

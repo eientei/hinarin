@@ -65,30 +65,36 @@ txID fxFindModule(txMachine* the, txID moduleID, txSlot* slot) {
 
     hinarin_string *path = hinarin_string_new();
     hinarin_string_append(path, name);
-    if (!hinarin_string_contains(path, "://")) {
-        hinarin_string_insert(path, 0, "file://");
-        hinarin_string_append(path, ".js");
-    }
 
     bool exists = false;
 
-
-    hinarin_download_free_result(hinarin_download_to_exists(hinarin_download_request_new(path->data, NULL, NULL), &exists));
-    if (!exists) {
-        hinarin_string_insert(path, path->length-3, "/index");
-        hinarin_download_free_result(hinarin_download_to_exists(hinarin_download_request_new(path->data, NULL, NULL), &exists));
-    }
-
-    if (!exists) {
-        path->data[0] = '\0';
-        path->length = 0;
-        hinarin_string_append(path, "https://raw.githubusercontent.com/");
-        hinarin_string_append(path, name);
+    if (!hinarin_string_contains(path, "://")) {
+        hinarin_string_insert(path, 0, "file://");
         hinarin_string_append(path, ".js");
 
         hinarin_download_free_result(hinarin_download_to_exists(hinarin_download_request_new(path->data, NULL, NULL), &exists));
         if (!exists) {
             hinarin_string_insert(path, path->length-3, "/index");
+            hinarin_download_free_result(hinarin_download_to_exists(hinarin_download_request_new(path->data, NULL, NULL), &exists));
+        }
+
+        if (!exists) {
+            path->data[0] = '\0';
+            path->length = 0;
+            hinarin_string_append(path, "https://raw.githubusercontent.com/");
+            hinarin_string_append(path, name);
+            hinarin_string_append(path, ".js");
+
+            hinarin_download_free_result(hinarin_download_to_exists(hinarin_download_request_new(path->data, NULL, NULL), &exists));
+            if (!exists) {
+                hinarin_string_insert(path, path->length-3, "/index");
+                hinarin_download_free_result(hinarin_download_to_exists(hinarin_download_request_new(path->data, NULL, NULL), &exists));
+            }
+        }
+    } else {
+        hinarin_download_free_result(hinarin_download_to_exists(hinarin_download_request_new(path->data, NULL, NULL), &exists));
+        if (!exists) {
+            hinarin_string_append(path, ".js");
             hinarin_download_free_result(hinarin_download_to_exists(hinarin_download_request_new(path->data, NULL, NULL), &exists));
         }
     }
