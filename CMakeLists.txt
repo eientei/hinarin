@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.9)
 project(hinarin C)
 
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
+
+set(CMAKE_C_FLAGS "-O0 -g")
 
 if (TOOLCHAIN)
   set(TOOLCHAIN_HOST --host=${TOOLCHAIN})
@@ -14,11 +15,11 @@ ExternalProject_Add(moddable
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/moddable-cmake
         DOWNLOAD_COMMAND ""
         CMAKE_ARGS
-        -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/libs
-        -DCMAKE_RC_COMPILER=${BINPATH}${CMAKE_RC_COMPILER}
-        -DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}
-        -DCMAKE_C_COMPILER=${BINPATH}${CMAKE_C_COMPILER}
-        -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
+        "-DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/libs"
+        "-DCMAKE_RC_COMPILER=${BINPATH}${CMAKE_RC_COMPILER}"
+        "-DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}"
+        "-DCMAKE_C_COMPILER=${BINPATH}${CMAKE_C_COMPILER}"
+        "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
         )
 
 ExternalProject_Add(gumbo-parser
@@ -26,8 +27,8 @@ ExternalProject_Add(gumbo-parser
         DOWNLOAD_COMMAND ""
         PATCH_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/libs/gumbo-parser && ./autogen.sh
         CONFIGURE_COMMAND
-        CC=${BINPATH}${CMAKE_C_COMPILER}
-        CFLAGS=${CMAKE_C_FLAGS}
+        export "CC=${BINPATH}${CMAKE_C_COMPILER}" &&
+        export "CFLAGS=${CMAKE_C_FLAGS}" &&
         ${CMAKE_CURRENT_SOURCE_DIR}/libs/gumbo-parser/configure
         --prefix=${CMAKE_BINARY_DIR}/libs
         ${TOOLCHAIN_HOST}
@@ -46,11 +47,11 @@ ExternalProject_Add(glfw3
         -DGLFW_BUILD_EXAMPLES=OFF
         -DGLFW_BUILD_TESTS=OFF
         -DGLFW_BUILD_DOCS=OFF
-        -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/libs
-        -DCMAKE_RC_COMPILER=${BINPATH}${CMAKE_RC_COMPILER}
-        -DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}
-        -DCMAKE_C_COMPILER=${BINPATH}${CMAKE_C_COMPILER}
-        -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
+        "-DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/libs"
+        "-DCMAKE_RC_COMPILER=${BINPATH}${CMAKE_RC_COMPILER}"
+        "-DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}"
+        "-DCMAKE_C_COMPILER=${BINPATH}${CMAKE_C_COMPILER}"
+        "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
         )
 
 if (WIN32)
@@ -59,30 +60,30 @@ if (WIN32)
           DOWNLOAD_COMMAND ""
           PATCH_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/libs/glew && make extensions
           CONFIGURE_COMMAND cmake ${CMAKE_CURRENT_SOURCE_DIR}/libs/glew/build/cmake
-          -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/libs
-          -DCMAKE_RC_COMPILER=${BINPATH}${CMAKE_RC_COMPILER}
-          -DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}
-          -DCMAKE_C_COMPILER=${BINPATH}${CMAKE_C_COMPILER}
-          -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
+          "-DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/libs"
+          "-DCMAKE_RC_COMPILER=${BINPATH}${CMAKE_RC_COMPILER}"
+          "-DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}"
+          "-DCMAKE_C_COMPILER=${BINPATH}${CMAKE_C_COMPILER}"
+          "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
           )
   ExternalProject_Add(zlib
           SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/zlib
           DOWNLOAD_COMMAND ""
           CMAKE_ARGS
-          -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/libs
-          -DCMAKE_RC_COMPILER=${BINPATH}${CMAKE_RC_COMPILER}
-          -DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}
-          -DCMAKE_C_COMPILER=${BINPATH}${CMAKE_C_COMPILER}
-          -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
+          "-DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/libs"
+          "-DCMAKE_RC_COMPILER=${BINPATH}${CMAKE_RC_COMPILER}"
+          "-DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}"
+          "-DCMAKE_C_COMPILER=${BINPATH}${CMAKE_C_COMPILER}"
+          "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
           )
   ExternalProject_Add(curl
           SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/curl
           DOWNLOAD_COMMAND ""
           PATCH_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/libs/curl && ./buildconf
           CONFIGURE_COMMAND
-          PKG_CONFIG_PATH=${CMAKE_BINARY_DIR}/libs/lib/pkgconfig
-          CC=${BINPATH}${CMAKE_C_COMPILER}
-          CFLAGS=${CMAKE_C_FLAGS}
+          export "PKG_CONFIG_PATH=${CMAKE_BINARY_DIR}/libs/lib/pkgconfig" &&
+          export "CC=${BINPATH}${CMAKE_C_COMPILER}" &&
+          export "CFLAGS=${CMAKE_C_FLAGS}" &&
           ${CMAKE_CURRENT_SOURCE_DIR}/libs/curl/configure
           --disable-crypto-auth
           --disable-pthreads
@@ -130,7 +131,7 @@ endif(NOT WIN32)
 include_directories(${CMAKE_BINARY_DIR}/libs/include ${CMAKE_BINARY_DIR}/libs/include/xs ${OPENGL_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${CURL_INCLUDE_DIRECTORIES} ${X11_INCLUDE_DIR})
 link_directories(${CMAKE_BINARY_DIR}/libs/lib ${CMAKE_BINARY_DIR}/libs/lib64)
 
-set(SOURCES src/main.c)
+set(SOURCES src/main.c src/bind_nuklear.c src/bind_nuklear.h src/bind_root.c src/bind_root.h src/string.c src/string.h src/file.c src/file.h src/download.c src/download.h src/linkedmap.c src/linkedmap.h src/platform.c src/hinarin.h)
 if (WIN32)
   add_executable(hinarin WIN32 ${SOURCES})
   target_link_libraries(hinarin ${OPENGL_gl_LIBRARY} glfw3.a gumbo.a xs.a libzlibstatic.a curl.a glew32.a pthread.a crypt32 ws2_32 opengl32)

@@ -1,29 +1,38 @@
-#define GLEW_STATIC
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-
-#include <string.h>
-
-#define NK_INCLUDE_FIXED_TYPES
-#define NK_INCLUDE_STANDARD_IO
-#define NK_INCLUDE_STANDARD_VARARGS
-#define NK_INCLUDE_DEFAULT_ALLOCATOR
-#define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
-#define NK_INCLUDE_FONT_BAKING
-#define NK_INCLUDE_DEFAULT_FONT
 #define NK_IMPLEMENTATION
 #define NK_GLFW_GL3_IMPLEMENTATION
-#include <nuklear.h>
-#include <nuklear_glfw_gl3.h>
+#include "hinarin.h"
 
-#include <xsAll.h>
-#include <xs.h>
+#include <string.h>
+#include <sys/time.h>
+
+#include "bind_root.h"
+#include "bind_nuklear.h"
+
+#include "file.h"
+#include "download.h"
 
 void hinarin_error_callback(int e, const char *d) {
     printf("Error %d: %s\n", e, d);
 }
 
+void *hinarin_init_thread(void *data) {
+    xsMachine *the = data;
+    hinarin_string *path = hinarin_string_new();
+    hinarin_homedir(path);
+    hinarin_string_append(path, "/.hinarin/modules/init.js");
+    FILE *f = fopen(path->data, "a");
+    fseek(f, 0, SEEK_END);
+    if (ftell(f) == 0) {
+        hinarin_download_free_result(hinarin_download_to_file(hinarin_download_request_new("https://raw.githubusercontent.com/eientei/hinarin/master/base/init.js", NULL, NULL), path->data));
+    }
+    fclose(f);
+    hinarin_string_free(path);
+    xsTry { fxRunModule(the, "init"); } xsCatch { printf("%s\n", xsToString(xsException)); }
+}
+
 void hinarin_init(xsMachine *the) {
+    hinarin_context *hinarin = xsGetContext(the);
+    
     glfwSetErrorCallback(hinarin_error_callback);
     if (!glfwInit()) {
         fprintf(stderr, "Failed to setup GLFW\n");
@@ -33,63 +42,59 @@ void hinarin_init(xsMachine *the) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    GLFWwindow *window = glfwCreateWindow(900, 600, "Hinarin", NULL, NULL);
-    glfwMakeContextCurrent(window);
+    hinarin->window = glfwCreateWindow(900, 600, "Hinarin", NULL, NULL);
+    glfwMakeContextCurrent(hinarin->window);
     if (glewInit() != GLEW_OK) {
         fprintf(stderr, "Failed to setup GLEW\n");
         exit(1);
     }
 
-    xsSlot window_obj = xsNewHostObject(NULL);
-    xsSetHostData(window_obj, window);
-    xsSet(xsGlobal, xsID("window"), window_obj);
-}
-
-void hinarin_loop(xsMachine *the) {
-    struct timeval te;
-    gettimeofday(&te, NULL);
-    time_t start = (te.tv_sec * 1000 + te.tv_usec / 1000);
-    uint32_t frame = 0;
-
-    xsSlot window_obj = xsGet(xsGlobal, xsID("window"));
-    
-    GLFWwindow *window = xsGetHostData(window_obj);
-
-    struct nk_context *ctx = nk_glfw3_init(window, NK_GLFW3_INSTALL_CALLBACKS);
+    hinarin->nuklear = nk_glfw3_init(hinarin->window, NK_GLFW3_INSTALL_CALLBACKS);
 
     struct nk_font_atlas *atlas;
     nk_glfw3_font_stash_begin(&atlas);
     struct nk_font *font = nk_font_atlas_add_default(atlas, 16, 0);
     nk_glfw3_font_stash_end();
-    nk_style_set_font(ctx, &font->handle);
+    nk_style_set_font(hinarin->nuklear, &font->handle);
 
-    int width, height, xpos, ypos;
-    while (!glfwWindowShouldClose(window)) {
+    hinarin_bind_root(the);
+    hinarin_bind_nuklear(the);
+    
+    pthread_create(&hinarin->init_thread, NULL, hinarin_init_thread, the);
+}
+
+void hinarin_loop(xsMachine *the) {
+    hinarin_context *hinarin = xsGetContext(the);
+    
+    struct timeval te;
+    gettimeofday(&te, NULL);
+    time_t start = (te.tv_sec * 1000 + te.tv_usec / 1000);
+    uint32_t frame = 0;
+
+    while (!glfwWindowShouldClose(hinarin->window)) {
         glfwPollEvents();
         nk_glfw3_new_frame();
 
-        glfwGetWindowPos(window, &xpos, &ypos);
-        glfwGetWindowSize(window, &width, &height);
-        glViewport(0, 0, width, height);
+        glfwGetWindowPos(hinarin->window, &hinarin->xpos, &hinarin->ypos);
+        glfwGetWindowSize(hinarin->window, &hinarin->width, &hinarin->height);
+        glViewport(0, 0, hinarin->width, hinarin->height);
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(0.2, 0.2, 0.2, 1.0);
 
         gettimeofday(&te, NULL);
 
-        //hinarin_set_name_number(window, "xpos", xpos);
-        //hinarin_set_name_number(window, "ypos", ypos);
-        //hinarin_set_name_number(window, "width", width);
-        //hinarin_set_name_number(window, "height", height);
-        //hinarin_set_name_number(window, "frame", frame++);
-        //hinarin_set_name_number(window, "milliseconds", (te.tv_sec * 1000 + te.tv_usec / 1000) - start);
+        hinarin->frame++;
+        hinarin->milliseconds = (te.tv_sec * 1000 + te.tv_usec / 1000) - start;
 
         nk_glfw3_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
-        glfwSwapBuffers(window);
+        glfwSwapBuffers(hinarin->window);
         frame++;
     }
 }
 
 void hinarin_deinit(xsMachine *the) {
+    hinarin_context *hinarin = xsGetContext(the);
+    pthread_join(hinarin->init_thread, NULL);
     nk_glfw3_shutdown();
     glfwTerminate();
 }
@@ -113,7 +118,8 @@ int main(int argc, char **argv) {
 	};
     xsCreation* creation = &_creation;
     fxInitializeSharedCluster();
-    xsMachine* machine = xsCreateMachine(creation, "hinarin", NULL);
+    hinarin_context hinarin = {0};
+    xsMachine* machine = xsCreateMachine(creation, "hinarin", &hinarin);
     xsBeginHost(machine);
             xsTry { hinarin_incontext(the); } xsCatch { printf("GLOBAL ERROR: %s\n", xsToString(xsException)); }
     xsEndHost(the);
