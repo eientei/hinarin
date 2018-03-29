@@ -1,2 +1,2 @@
-import 'eientei/hinarin/master/base/core';
-import 'eientei/hinarin/master/base/example';
+import 'https://eientei.github.io/hinarin/core';
+import 'https://eientei.github.io/hinarin/example';

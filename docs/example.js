@@ -1,4 +1,4 @@
-import {Window} from 'eientei/hinarin/master/base/core';
+import {Window} from 'https://eientei.github.io/hinarin/core';
 
 nuklear.render(new Window({
     title: "root",
