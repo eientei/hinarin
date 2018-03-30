@@ -69,7 +69,25 @@ txID fxFindModule(txMachine* the, txID moduleID, txSlot* slot) {
     hinarin_string_append(path, name);
 
     if (hinarin_string_starts(path, ".")) {
-        hinarin_string_insert(path, 0, fxName(the, moduleID));
+        hinarin_string *parent = hinarin_string_new();
+        hinarin_string_append(parent, fxName(the, moduleID));
+        for (size_t i = parent->length-1; i > 0; i--) {
+            if (parent->data[i] == '/') {
+                parent->length = i;
+                parent->data[i] = '\0';
+                break;
+            }
+        }
+        size_t skip = 0;
+        while (skip < path->length) {
+            if (path->data[skip] != '.') {
+                break;
+            }
+            skip++;
+        }
+        hinarin_string_append(parent, path->data+skip);
+        hinarin_string_free(path);
+        path = parent;
     }
 
     bool exists = false;
