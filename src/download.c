@@ -217,6 +217,7 @@ static hinarin_download_result *hinarin_download_process(hinarin_download_reques
     }
     curl_easy_setopt(ctx.curl, CURLOPT_HEADERFUNCTION, hinarin_download_header_function);
     curl_easy_setopt(ctx.curl, CURLOPT_HEADERDATA, &ctx);
+    curl_easy_setopt(ctx.curl, CURLOPT_FOLLOWLOCATION, 1);
     
     ctx.result->error = curl_easy_perform(ctx.curl);
     curl_easy_getinfo(ctx.curl, CURLINFO_RESPONSE_CODE, &ctx.result->code);

@@ -68,6 +68,10 @@ txID fxFindModule(txMachine* the, txID moduleID, txSlot* slot) {
     hinarin_string *path = hinarin_string_new();
     hinarin_string_append(path, name);
 
+    if (hinarin_string_starts(path, ".")) {
+        hinarin_string_insert(path, 0, fxName(the, moduleID));
+    }
+
     bool exists = false;
 
     if (hinarin_string_contains(path, "://")) {
@@ -78,6 +82,11 @@ txID fxFindModule(txMachine* the, txID moduleID, txSlot* slot) {
     } else {
         hinarin_string_insert(path, 0, "http://");
         hinarin_string_append(path, ".js");
+        hinarin_download_free_result(hinarin_download_to_exists(hinarin_download_request_new(path->data, NULL, NULL), &exists));
+    }
+
+    if (!exists) {
+        hinarin_string_insert(path, path->length-3, "/index");
         hinarin_download_free_result(hinarin_download_to_exists(hinarin_download_request_new(path->data, NULL, NULL), &exists));
     }
 
