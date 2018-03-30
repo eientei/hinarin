@@ -28,6 +28,7 @@ static hinarin_linkedmap_bucket *hinarin_linkedmap_bucket_new(const char *key, s
     bucket->value = malloc(valuelen+1);
     bucket->keylen = keylen;
     bucket->valuelen = valuelen;
+    bucket->next = NULL;
     memmove(bucket->key, key, keylen);
     bucket->key[keylen] = '\0';
     memmove(bucket->value, value, valuelen);

@@ -27,7 +27,7 @@ void *hinarin_init_thread(void *data) {
     }
     fclose(f);
     hinarin_string_free(path);
-    xsTry { fxRunModule(the, "init"); } xsCatch { printf("%s\n", xsToString(xsException)); }
+    xsTry { fxRunModule(the, "file://init.js"); } xsCatch { printf("%s\n", xsToString(xsException)); }
 }
 
 void hinarin_init(xsMachine *the) {
