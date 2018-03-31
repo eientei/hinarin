@@ -1,3 +1,7 @@
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #define NK_IMPLEMENTATION
 #define NK_GLFW_GL3_IMPLEMENTATION
 #include "hinarin.h"
@@ -23,11 +27,16 @@ void *hinarin_init_thread(void *data) {
     hinarin_homedir(path);
     hinarin_string_append(path, "/.hinarin/modules/init.js");
     FILE *f = fopen(path->data, "a");
-    fseek(f, 0, SEEK_END);
-    if (ftell(f) == 0) {
+    if (f == NULL) {
         hinarin_download_free_result(hinarin_download_to_file(hinarin_download_request_new("https://eientei.github.io/hinarin/init.js", NULL, NULL), path->data));
+    } else {
+        fseek(f, 0, SEEK_END);
+        if (ftell(f) == 0) {
+            hinarin_download_free_result(hinarin_download_to_file(
+                    hinarin_download_request_new("https://eientei.github.io/hinarin/init.js", NULL, NULL), path->data));
+        }
+        fclose(f);
     }
-    fclose(f);
     hinarin_string_free(path);
     xsTry { fxRunModule(the, "file://init.js"); } xsCatch { printf("%s\n", xsToString(xsException)); }
 }
@@ -53,8 +62,29 @@ void hinarin_init(xsMachine *the) {
 
     hinarin->nuklear = nk_glfw3_init(hinarin->window, NK_GLFW3_INSTALL_CALLBACKS);
 
+    const char *fontName = "Arial";
+    struct nk_font_atlas *atlas;
+    nk_glfw3_font_stash_begin(&atlas);
+    struct nk_font_config conf = nk_font_config(0);
+    conf.range = nk_font_cyrillic_glyph_ranges();
+    struct nk_font *generic;
+
+#ifdef _WIN32
+    HDC hDC = CreateDC("DISPLAY", NULL, NULL, NULL);
+    LOGFONT logFont = {0};
+    memmove(logFont.lfFaceName, fontName, strlen(fontName));
+    HGDIOBJ hFont = CreateFontIndirect(&logFont);
+    SelectObject(hDC, hFont);
+    size_t fontDataLen = GetFontData(hDC, 0, 0, NULL, 0);
+    void *ptr = malloc(fontDataLen);
+    GetFontData(hDC, 0, 0, ptr, fontDataLen);
+    generic = nk_font_atlas_add_from_memory(atlas, ptr, fontDataLen, 22, &conf);
+    free(ptr);
+    DeleteObject(hFont);
+    DeleteDC(hDC);
+#else
     FcConfig* config = FcInitLoadConfigAndFonts();
-    FcPattern* pat = FcNameParse((const FcChar8*)"Arial");
+    FcPattern* pat = FcNameParse((const FcChar8*)fontName);
     FcConfigSubstitute(config, pat, FcMatchPattern);
     FcDefaultSubstitute(pat);
     char* fontFile = NULL;
@@ -66,17 +96,11 @@ void hinarin_init(xsMachine *the) {
             fontFile = (char*)file;
         }
     }
-
-    struct nk_font_atlas *atlas;
-    nk_glfw3_font_stash_begin(&atlas);
-    struct nk_font_config conf = nk_font_config(0);
-    conf.range = nk_font_cyrillic_glyph_ranges();
-    //struct nk_font *font = nk_font_atlas_add_default(atlas, 16, 0);
-    struct nk_font *generic = nk_font_atlas_add_from_file(atlas, fontFile, 22, &conf);
+    generic = nk_font_atlas_add_from_file(atlas, fontFile, 22, &conf);
+    FcPatternDestroy(pat);
+#endif
     nk_glfw3_font_stash_end();
     nk_style_set_font(hinarin->nuklear, &generic->handle);
-
-    FcPatternDestroy(pat);
 
     hinarin_bind_root(the);
     hinarin_bind_nuklear(the);
@@ -101,6 +125,12 @@ void hinarin_loop(xsMachine *the) {
         glViewport(0, 0, hinarin->width, hinarin->height);
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(0.2, 0.2, 0.2, 1.0);
+
+        struct nk_rect bounds = {0,0,hinarin->width,hinarin->height};
+        nk_begin(hinarin->nuklear, "loading", bounds, 0);
+        nk_layout_row_dynamic(hinarin->nuklear, hinarin->height - 20, 1);
+        nk_label(hinarin->nuklear, "Loading...", NK_TEXT_CENTERED);
+        nk_end(hinarin->nuklear);
 
         gettimeofday(&te, NULL);
 
