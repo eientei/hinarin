@@ -14,6 +14,7 @@ include(ExternalProject)
 ExternalProject_Add(moddable
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/moddable-cmake
         DOWNLOAD_COMMAND ""
+        PATCH_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/libs/moddable && patch -p1 < ../moddable-cmake/patch.diff
         CMAKE_ARGS
         "-DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/libs"
         "-DCMAKE_RC_COMPILER=${BINPATH}${CMAKE_RC_COMPILER}"
@@ -32,6 +33,54 @@ ExternalProject_Add(gumbo-parser
         ${CMAKE_CURRENT_SOURCE_DIR}/libs/gumbo-parser/configure
         --prefix=${CMAKE_BINARY_DIR}/libs
         ${TOOLCHAIN_HOST}
+        )
+ExternalProject_Add(fontconfig
+        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/fontconfig
+        DOWNLOAD_COMMAND ""
+        PATCH_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/libs/fontconfig && ./autogen.sh && make distclean
+        CONFIGURE_COMMAND
+        export "CC=${BINPATH}${CMAKE_C_COMPILER}" &&
+        export "CFLAGS=${CMAKE_C_FLAGS}" &&
+        ${CMAKE_CURRENT_SOURCE_DIR}/libs/fontconfig/configure
+        --prefix=${CMAKE_BINARY_DIR}/libs
+        --enable-static=yes
+        --enable-shared=no
+        --disable-libxml2
+        --with-expat=${CMAKE_BINARY_DIR}/libs
+        ${TOOLCHAIN_HOST}
+        )
+ExternalProject_Add(freetype2
+        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/freetype2
+        DOWNLOAD_COMMAND ""
+        PATCH_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/libs/freetype2 && ./autogen.sh
+        CONFIGURE_COMMAND
+        export "CC=${BINPATH}${CMAKE_C_COMPILER}" &&
+        export "CFLAGS=${CMAKE_C_FLAGS}" &&
+        ${CMAKE_CURRENT_SOURCE_DIR}/libs/freetype2/configure
+        --prefix=${CMAKE_BINARY_DIR}/libs
+        --enable-static=yes
+        --enable-shared=no
+        --without-png
+        --without-bzip2
+        --without-zlib
+        --without-harfbuzz
+        ${TOOLCHAIN_HOST}
+        )
+ExternalProject_Add(expat
+        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/libexpat/expat
+        DOWNLOAD_COMMAND ""
+        PATCH_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/libs/libexpat/expat && ./buildconf.sh
+        CONFIGURE_COMMAND
+        export "CC=${BINPATH}${CMAKE_C_COMPILER}" &&
+        export "CFLAGS=${CMAKE_C_FLAGS}" &&
+        ${CMAKE_CURRENT_SOURCE_DIR}/libs/libexpat/expat/configure
+        --prefix=${CMAKE_BINARY_DIR}/libs
+        --enable-static=yes
+        --enable-shared=no
+        --without-docbook
+        ${TOOLCHAIN_HOST}
+        BUILD_COMMAND ""
+        INSTALL_COMMAND make install || true
         )
 ExternalProject_Add(nuklear
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/nuklear
@@ -134,11 +183,11 @@ link_directories(${CMAKE_BINARY_DIR}/libs/lib ${CMAKE_BINARY_DIR}/libs/lib64)
 set(SOURCES src/main.c src/bind_nuklear.c src/bind_nuklear.h src/bind_root.c src/bind_root.h src/string.c src/string.h src/file.c src/file.h src/download.c src/download.h src/linkedmap.c src/linkedmap.h src/platform.c src/hinarin.h)
 if (WIN32)
   add_executable(hinarin WIN32 ${SOURCES})
-  target_link_libraries(hinarin ${OPENGL_gl_LIBRARY} glfw3.a gumbo.a xs.a libzlibstatic.a curl.a glew32.a pthread.a crypt32 ws2_32 opengl32)
-  add_dependencies(hinarin moddable gumbo-parser nuklear glfw3 glew zlib curl pthread-win32)
+  target_link_libraries(hinarin ${OPENGL_gl_LIBRARY} glfw3.a gumbo.a xs.a fontconfig.a freetype.a expat.a libzlibstatic.a curl.a glew32.a pthread.a crypt32 ws2_32 opengl32)
+  add_dependencies(hinarin moddable gumbo-parser expat fontconfig freetype2 nuklear glfw3 glew zlib curl pthread-win32)
 else (WIN32)
   add_executable(hinarin ${SOURCES})
-  target_link_libraries(hinarin ${OPENGL_gl_LIBRARY} glfw3.a gumbo.a xs.a ${ZLIB_LIBRARIES} ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${GLEW_LIBRARIES} ${X11_LIBRARIES} dl pthread m)
-  add_dependencies(hinarin moddable gumbo-parser nuklear glfw3)
+  target_link_libraries(hinarin ${OPENGL_gl_LIBRARY} glfw3.a gumbo.a xs.a fontconfig.a freetype.a expat.a ${ZLIB_LIBRARIES} ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${GLEW_LIBRARIES} ${X11_LIBRARIES} dl pthread m uuid)
+  add_dependencies(hinarin moddable gumbo-parser expat fontconfig freetype2 nuklear glfw3)
 endif (WIN32)
 set_target_properties(hinarin PROPERTIES LINKER_LANGUAGE C)

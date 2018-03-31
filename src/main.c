@@ -5,6 +5,8 @@
 #include <string.h>
 #include <sys/time.h>
 
+#include <fontconfig/fontconfig.h>
+
 #include "bind_root.h"
 #include "bind_nuklear.h"
 
@@ -51,11 +53,30 @@ void hinarin_init(xsMachine *the) {
 
     hinarin->nuklear = nk_glfw3_init(hinarin->window, NK_GLFW3_INSTALL_CALLBACKS);
 
+    FcConfig* config = FcInitLoadConfigAndFonts();
+    FcPattern* pat = FcNameParse((const FcChar8*)"Arial");
+    FcConfigSubstitute(config, pat, FcMatchPattern);
+    FcDefaultSubstitute(pat);
+    char* fontFile = NULL;
+    FcResult result;
+    FcPattern* font = FcFontMatch(config, pat, &result);
+    if (font) {
+        FcChar8* file = NULL;
+        if (FcPatternGetString(font, FC_FILE, 0, &file) == FcResultMatch) {
+            fontFile = (char*)file;
+        }
+    }
+
     struct nk_font_atlas *atlas;
     nk_glfw3_font_stash_begin(&atlas);
-    struct nk_font *font = nk_font_atlas_add_default(atlas, 16, 0);
+    struct nk_font_config conf = nk_font_config(0);
+    conf.range = nk_font_cyrillic_glyph_ranges();
+    //struct nk_font *font = nk_font_atlas_add_default(atlas, 16, 0);
+    struct nk_font *generic = nk_font_atlas_add_from_file(atlas, fontFile, 22, &conf);
     nk_glfw3_font_stash_end();
-    nk_style_set_font(hinarin->nuklear, &font->handle);
+    nk_style_set_font(hinarin->nuklear, &generic->handle);
+
+    FcPatternDestroy(pat);
 
     hinarin_bind_root(the);
     hinarin_bind_nuklear(the);
@@ -87,7 +108,7 @@ void hinarin_loop(xsMachine *the) {
         hinarin->milliseconds = (te.tv_sec * 1000 + te.tv_usec / 1000) - start;
 
         for (linked_slot *next = hinarin->renderers; next != NULL; next = next->next) {
-            xsCallFunction0(xsGet(next->slot, xsID("render")), next->slot);
+            xsTry { xsCallFunction0(xsGet(next->slot, xsID("render")), next->slot); } xsCatch { printf("%s\n", xsToString(xsException)); }
         }
 
         nk_glfw3_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);

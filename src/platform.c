@@ -138,7 +138,11 @@ void fxLoadModule(txMachine* the, txID moduleID) {
     struct stat attrib;
     if (stat(path->data, &attrib) == 0) {
         char buf[33] = {0};
+#ifdef _WIN32
+        strftime(buf, 32, "%a, %d %b %Y %T GMT", gmtime(&attrib.st_mtime));
+#else
         strftime(buf, 32, "%a, %d %b %Y %T GMT", gmtime(&attrib.st_mtim.tv_sec));
+#endif
         hinarin_download_request_header(request, "If-Modified-Since", buf);
     }
     hinarin_string *string = hinarin_string_new();

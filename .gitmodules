@@ -22,3 +22,15 @@
 [submodule "libs/moddable"]
 	path = libs/moddable
 	url = https://github.com/Moddable-OpenSource/moddable
+[submodule "libs/fontconfig"]
+	path = libs/fontconfig
+	url = https://github.com/behdad/fontconfig
+[submodule "libs/libuuid"]
+	path = libs/libuuid
+	url = https://github.com/cloudbase/libuuid
+[submodule "libs/freetype2"]
+	path = libs/freetype2
+	url = git://git.savannah.gnu.org/freetype/freetype2.git
+[submodule "libs/libexpat"]
+	path = libs/libexpat
+	url = https://github.com/libexpat/libexpat

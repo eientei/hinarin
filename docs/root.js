@@ -1,6 +1,13 @@
-import {Window} from './lib';
+import {DynamicLayout, Window, Label} from './lib';
 
-nuklear.render(new Window({
+const rootWindow = new Window({
     title: "root",
-    bounds: {x: '0%', y: '0%', w: '100%', h: '100%'}
-}));
+    rect: {x: '0%', y: '0%', w: '100%', h: '100%'},
+    layout: new DynamicLayout({height: '30%'})
+});
+
+const test = new Label({text: "Бака!"});
+
+rootWindow.setChildren([[test, test, test],[test, test, test, test],[test, test, test]]);
+
+nuklear.render(rootWindow);

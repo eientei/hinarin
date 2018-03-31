@@ -144,6 +144,16 @@ void hinarin_root_milliseconds(xsMachine *the) {
     xsResult = xsNumber(hinarin->milliseconds);
 }
 
+void hinarin_root_get_width(xsMachine *the) {
+    hinarin_context *hinarin = xsGetContext(the);
+    xsResult = xsNumber(hinarin->width);
+}
+
+void hinarin_root_get_height(xsMachine *the) {
+    hinarin_context *hinarin = xsGetContext(the);
+    xsResult = xsNumber(hinarin->height);
+}
+
 void hinarin_bind_root(xsMachine *the) {
     xsDefine(xsGlobal, xsID("print"), xsNewHostFunction(hinarin_root_print, 1), xsChangeAll);
     xsDefine(xsGlobal, xsID("println"), xsNewHostFunction(hinarin_root_println, 1), xsChangeAll);
@@ -155,4 +165,6 @@ void hinarin_bind_root(xsMachine *the) {
     xsDefine(window_obj, xsID("height"), xsNewHostFunction(hinarin_root_height, 0), xsDontSet | xsDontDelete | xsIsGetter);
     xsDefine(window_obj, xsID("frame"), xsNewHostFunction(hinarin_root_frame, 0), xsDontSet | xsDontDelete | xsIsGetter);
     xsDefine(window_obj, xsID("milliseconds"), xsNewHostFunction(hinarin_root_milliseconds, 0), xsDontSet | xsDontDelete | xsIsGetter);
+    xsDefine(window_obj, xsID("getWidth"), xsNewHostFunction(hinarin_root_get_width, 0), xsDontSet | xsDontDelete);
+    xsDefine(window_obj, xsID("getHeight"), xsNewHostFunction(hinarin_root_get_height, 0), xsDontSet | xsDontDelete);
 }
